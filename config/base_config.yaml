@@ -10,8 +10,6 @@ tokenizer:
   padding: max_length
   stride: 128
   return_token_type_ids: False # False for Roberta models
-  return_overflowing_tokens: True
-  return_offsets_mapping: True
 
 optimizer: # default AdamW
   learning_rate: 1e-5
@@ -26,23 +24,24 @@ criterion:
   nmae: ce
 
 train:
-  output_dir: ./saved_models/
+  output_dir: # default: saved_models/model/{wandb_name}_{time}
   num_train_epochs: 5
   do_train: True
   do_eval: True
   do_predict: False
   overwrite_output_dir: False
   fp16: False
+  logging_strategy: epoch
+  logging_steps: 500
 
 utils:
   seed: 42
   num_workers: 4
   overwrite_cache: False
   max_answer_length: 30
-  top_k: 3
 
 wandb:
   team: next-level-potato # team account name
   project: MRC # project name
   name: LWJ # 실험자 명
-  info: baseline # 실험명
+  tags: [] # tag

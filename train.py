@@ -24,26 +24,29 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", "-c", type=str, default="base_config")
     # parser.add_argument("--mode", "-m", default="train")
     args, _ = parser.parse_known_args()
     config = OmegaConf.load(f"./config/{args.config}.yaml")
-    config.train.update(config.optimizer)
-    training_args = TrainingArguments(**config.train)
-    training_args.report_to = ["wandb"]
 
     # wandb 설정
     now_time = datetime.datetime.now(pytz.timezone("Asia/Seoul")).strftime("%m-%d-%H-%M")
+    run_id = f"{config.wandb.name}_{now_time}"
     wandb.init(
         entity=config.wandb.team,
         project=config.wandb.project,
         group=config.model.name,
-        config=training_args,
-        id=f"{config.wandb.name}_{now_time}",
+        id=run_id,
         tags=config.wandb.tags,
     )
+
+    config.train.update(config.optimizer)
+    if config.train.output_dir is None:
+        config.train.output_dir = os.path.join("saved_models", config.model.name, run_id)
+    training_args = TrainingArguments(**config.train)
+    training_args.report_to = ["wandb"]
+    print(training_args)
 
     # logging 설정
     logging.basicConfig(
@@ -97,6 +100,8 @@ def main():
             examples[question_column_name if pad_on_right else context_column_name],
             examples[context_column_name if pad_on_right else question_column_name],
             truncation="only_second" if pad_on_right else "only_first",
+            return_overflowing_tokens=True,
+            return_offsets_mapping=True,
             **config.tokenizer,
         )
 
@@ -178,6 +183,8 @@ def main():
             examples[question_column_name if pad_on_right else context_column_name],
             examples[context_column_name if pad_on_right else question_column_name],
             truncation="only_second" if pad_on_right else "only_first",
+            return_offsets_mapping=True,
+            return_overflowing_tokens=True,
             **config.tokenizer,
         )
 
