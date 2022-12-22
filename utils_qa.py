@@ -271,11 +271,12 @@ def check_sanity(
 
     # last checkpoint 찾기.
     last_checkpoint = None
-    if os.path.isdir(config.path.output) and config.train.do_train and not config.train.overwrite_output_dir:
-        last_checkpoint = get_last_checkpoint(config.path.output)
-        if last_checkpoint is None and len(os.listdir(config.path.output)) > 0:
+    if os.path.isdir(config.train.output_dir) and config.train.do_train and not config.train.overwrite_output_dir:
+        last_checkpoint = get_last_checkpoint(config.train.output_dir)
+        if last_checkpoint is None and len(os.listdir(config.train.output_dir)) > 0:
             raise ValueError(
-                f"Output directory ({config.path.output}) already exists and is not empty. " "Configure --overwrite_output_dir as True to overcome."
+                f"Output directory ({config.train.output_dir}) already exists and is not empty. "
+                "Configure --overwrite_output_dir as True to overcome."
             )
         elif last_checkpoint is not None:
             logger.info(
