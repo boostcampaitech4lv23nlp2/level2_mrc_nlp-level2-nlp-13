@@ -31,8 +31,8 @@ train:
   do_predict: False
   overwrite_output_dir: False
   fp16: False
-  logging_strategy: epoch
-  logging_steps: 500
+  save_strategy : epoch
+  save_steps: 500
 
 utils:
   seed: 42
