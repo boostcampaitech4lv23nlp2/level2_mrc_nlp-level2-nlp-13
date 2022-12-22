@@ -1,0 +1,11 @@
+pip install torch==1.13
+pip install datasets==2.7.1
+pip install transformers==4.25.1
+pip install tqdm
+pip install pandas
+pip install scikit-learn
+pip install faiss-gpu
+pip install pytorch-lightning==1.8.5.post0
+pip install omegaconf==2.3.0
+pip install wandb==0.13.7
+pip install black==22.12.0
