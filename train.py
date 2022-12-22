@@ -74,6 +74,19 @@ def main():
         from_tf=bool(".ckpt" in config.model.name),
     )
 
+    # do_train mrc model 혹은 do_eval mrc model
+    if training_args.do_train or training_args.do_eval:
+        run_mrc(config, training_args, datasets, tokenizer, model)
+
+
+def run_mrc(
+    config,
+    training_args: TrainingArguments,
+    datasets: DatasetDict,
+    tokenizer,
+    model,
+) -> NoReturn:
+
     # dataset을 전처리합니다.
     # training과 evaluation에서 사용되는 전처리는 아주 조금 다른 형태를 가집니다.
     if training_args.do_train:
