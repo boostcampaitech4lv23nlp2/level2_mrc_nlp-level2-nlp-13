@@ -94,14 +94,10 @@ def postprocess_qa_predictions(
         is_world_process_zero (:obj:`bool`, `optional`, defaults to :obj:`True`):
             이 프로세스가 main process인지 여부(logging/save를 수행해야 하는지 여부를 결정하는 데 사용됨)
     """
-    assert (
-        len(predictions) == 2
-    ), "`predictions` should be a tuple with two elements (start_logits, end_logits)."
+    assert len(predictions) == 2, "`predictions` should be a tuple with two elements (start_logits, end_logits)."
     all_start_logits, all_end_logits = predictions
 
-    assert len(predictions[0]) == len(
-        features
-    ), f"Got {len(predictions[0])} predictions and {len(features)} features."
+    assert len(predictions[0]) == len(features), f"Got {len(predictions[0])} predictions and {len(features)} features."
 
     # example과 mapping되는 feature 생성
     example_id_to_index = {k: i for i, k in enumerate(examples["id"])}
@@ -117,9 +113,7 @@ def postprocess_qa_predictions(
 
     # Logging.
     logger.setLevel(logging.INFO if is_world_process_zero else logging.WARN)
-    logger.info(
-        f"Post-processing {len(examples)} example predictions split into {len(features)} features."
-    )
+    logger.info(f"Post-processing {len(examples)} example predictions split into {len(features)} features.")
 
     # 전체 example들에 대한 main Loop
     for example_index, example in enumerate(tqdm(examples)):
@@ -137,16 +131,11 @@ def postprocess_qa_predictions(
             # logit과 original context의 logit을 mapping합니다.
             offset_mapping = features[feature_index]["offset_mapping"]
             # Optional : `token_is_max_context`, 제공되는 경우 현재 기능에서 사용할 수 있는 max context가 없는 answer를 제거합니다
-            token_is_max_context = features[feature_index].get(
-                "token_is_max_context", None
-            )
+            token_is_max_context = features[feature_index].get("token_is_max_context", None)
 
             # minimum null prediction을 업데이트 합니다.
             feature_null_score = start_logits[0] + end_logits[0]
-            if (
-                min_null_prediction is None
-                or min_null_prediction["score"] > feature_null_score
-            ):
+            if min_null_prediction is None or min_null_prediction["score"] > feature_null_score:
                 min_null_prediction = {
                     "offsets": (0, 0),
                     "score": feature_null_score,
@@ -155,9 +144,7 @@ def postprocess_qa_predictions(
                 }
 
             # `n_best_size`보다 큰 start and end logits을 살펴봅니다.
-            start_indexes = np.argsort(start_logits)[
-                -1 : -n_best_size - 1 : -1
-            ].tolist()
+            start_indexes = np.argsort(start_logits)[-1 : -n_best_size - 1 : -1].tolist()
 
             end_indexes = np.argsort(end_logits)[-1 : -n_best_size - 1 : -1].tolist()
 
@@ -172,16 +159,10 @@ def postprocess_qa_predictions(
                     ):
                         continue
                     # 길이가 < 0 또는 > max_answer_length인 answer도 고려하지 않습니다.
-                    if (
-                        end_index < start_index
-                        or end_index - start_index + 1 > max_answer_length
-                    ):
+                    if end_index < start_index or end_index - start_index + 1 > max_answer_length:
                         continue
                     # 최대 context가 없는 answer도 고려하지 않습니다.
-                    if (
-                        token_is_max_context is not None
-                        and not token_is_max_context.get(str(start_index), False)
-                    ):
+                    if token_is_max_context is not None and not token_is_max_context.get(str(start_index), False):
                         continue
                     prelim_predictions.append(
                         {
@@ -201,14 +182,10 @@ def postprocess_qa_predictions(
             null_score = min_null_prediction["score"]
 
         # 가장 좋은 `n_best_size` predictions만 유지합니다.
-        predictions = sorted(
-            prelim_predictions, key=lambda x: x["score"], reverse=True
-        )[:n_best_size]
+        predictions = sorted(prelim_predictions, key=lambda x: x["score"], reverse=True)[:n_best_size]
 
         # 낮은 점수로 인해 제거된 경우 minimum null prediction을 다시 추가합니다.
-        if version_2_with_negative and not any(
-            p["offsets"] == (0, 0) for p in predictions
-        ):
+        if version_2_with_negative and not any(p["offsets"] == (0, 0) for p in predictions):
             predictions.append(min_null_prediction)
 
         # offset을 사용하여 original context에서 answer text를 수집합니다.
@@ -218,13 +195,9 @@ def postprocess_qa_predictions(
             pred["text"] = context[offsets[0] : offsets[1]]
 
         # rare edge case에는 null이 아닌 예측이 하나도 없으며 failure를 피하기 위해 fake prediction을 만듭니다.
-        if len(predictions) == 0 or (
-            len(predictions) == 1 and predictions[0]["text"] == ""
-        ):
+        if len(predictions) == 0 or (len(predictions) == 1 and predictions[0]["text"] == ""):
 
-            predictions.insert(
-                0, {"text": "empty", "start_logit": 0.0, "end_logit": 0.0, "score": 0.0}
-            )
+            predictions.insert(0, {"text": "empty", "start_logit": 0.0, "end_logit": 0.0, "score": 0.0})
 
         # 모든 점수의 소프트맥스를 계산합니다(we do it with numpy to stay independent from torch/tf in this file, using the LogSumExp trick).
         scores = np.array([pred.pop("score") for pred in predictions])
@@ -246,11 +219,7 @@ def postprocess_qa_predictions(
             best_non_null_pred = predictions[i]
 
             # threshold를 사용해서 null prediction을 비교합니다.
-            score_diff = (
-                null_score
-                - best_non_null_pred["start_logit"]
-                - best_non_null_pred["end_logit"]
-            )
+            score_diff = null_score - best_non_null_pred["start_logit"] - best_non_null_pred["end_logit"]
             scores_diff_json[example["id"]] = float(score_diff)  # JSON-serializable 가능
             if score_diff > null_score_diff_threshold:
                 all_predictions[example["id"]] = ""
@@ -259,15 +228,7 @@ def postprocess_qa_predictions(
 
         # np.float를 다시 float로 casting -> `predictions`은 JSON-serializable 가능
         all_nbest_json[example["id"]] = [
-            {
-                k: (
-                    float(v)
-                    if isinstance(v, (np.float16, np.float32, np.float64))
-                    else v
-                )
-                for k, v in pred.items()
-            }
-            for pred in predictions
+            {k: (float(v) if isinstance(v, (np.float16, np.float32, np.float64)) else v) for k, v in pred.items()} for pred in predictions
         ]
 
     # output_dir이 있으면 모든 dicts를 저장합니다.
@@ -280,9 +241,7 @@ def postprocess_qa_predictions(
         )
         nbest_file = os.path.join(
             output_dir,
-            "nbest_predictions.json"
-            if prefix is None
-            else f"nbest_predictions_{prefix}".json,
+            "nbest_predictions.json" if prefix is None else f"nbest_predictions_{prefix}".json,
         )
         if version_2_with_negative:
             null_odds_file = os.path.join(
@@ -292,43 +251,31 @@ def postprocess_qa_predictions(
 
         logger.info(f"Saving predictions to {prediction_file}.")
         with open(prediction_file, "w", encoding="utf-8") as writer:
-            writer.write(
-                json.dumps(all_predictions, indent=4, ensure_ascii=False) + "\n"
-            )
+            writer.write(json.dumps(all_predictions, indent=4, ensure_ascii=False) + "\n")
         logger.info(f"Saving nbest_preds to {nbest_file}.")
         with open(nbest_file, "w", encoding="utf-8") as writer:
-            writer.write(
-                json.dumps(all_nbest_json, indent=4, ensure_ascii=False) + "\n"
-            )
+            writer.write(json.dumps(all_nbest_json, indent=4, ensure_ascii=False) + "\n")
         if version_2_with_negative:
             logger.info(f"Saving null_odds to {null_odds_file}.")
             with open(null_odds_file, "w", encoding="utf-8") as writer:
-                writer.write(
-                    json.dumps(scores_diff_json, indent=4, ensure_ascii=False) + "\n"
-                )
+                writer.write(json.dumps(scores_diff_json, indent=4, ensure_ascii=False) + "\n")
 
     return all_predictions
 
 
-def check_no_error(
-    data_args: DataTrainingArguments,
-    training_args: TrainingArguments,
+def check_sanity(
+    config,
     datasets: DatasetDict,
     tokenizer,
 ) -> Tuple[Any, int]:
 
     # last checkpoint 찾기.
     last_checkpoint = None
-    if (
-        os.path.isdir(training_args.output_dir)
-        and training_args.do_train
-        and not training_args.overwrite_output_dir
-    ):
-        last_checkpoint = get_last_checkpoint(training_args.output_dir)
-        if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
+    if os.path.isdir(config.path.output) and config.train.do_train and not config.train.overwrite_output_dir:
+        last_checkpoint = get_last_checkpoint(config.path.output)
+        if last_checkpoint is None and len(os.listdir(config.path.output)) > 0:
             raise ValueError(
-                f"Output directory ({training_args.output_dir}) already exists and is not empty. "
-                "Use --overwrite_output_dir to overcome."
+                f"Output directory ({config.path.output}) already exists and is not empty. " "Configure --overwrite_output_dir as True to overcome."
             )
         elif last_checkpoint is not None:
             logger.info(
@@ -344,13 +291,17 @@ def check_no_error(
             "requirement"
         )
 
-    if data_args.max_seq_length > tokenizer.model_max_length:
+    if config.tokenizer.max_length > tokenizer.model_max_length:
         logger.warn(
-            f"The max_seq_length passed ({data_args.max_seq_length}) is larger than the maximum length for the"
+            f"The max_seq_length passed ({config.tokenizer.max_length}) is larger than the maximum length for the"
             f"model ({tokenizer.model_max_length}). Using max_seq_length={tokenizer.model_max_length}."
         )
-    max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
+        config.tokenizer.max_length = tokenizer.model_max_length
 
     if "validation" not in datasets:
         raise ValueError("--do_eval requires a validation dataset")
-    return last_checkpoint, max_seq_length
+
+    if "roberta" in config.model.name and config.tokenizer.return_token_type_ids == True:
+        raise ValueError("Roberta models do not require token_type_ids")
+
+    return last_checkpoint
