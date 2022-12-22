@@ -1,0 +1,83 @@
+path:
+  train_path: ./data/raw_data/train.csv # ./data/preprocessed_data/train.typed_entity_marker.csv
+  test_path: ./data/raw_data/train.csv # ./data/preprocessed_data/train.typed_entity_marker.csv
+  predict_path: ./data/raw_data/test_data.csv # ./data/preprocessed_data/test.typed_entity_marker.csv
+  save_path: saved_models/
+  resume_path: # checkpoint path for resuming training
+
+  retrieval_train_path: ./data/train_dataset/train
+  retrieval_valid_path: ./data/train_dataset/validation
+  retrieval_test_path: ./data/test_dataset/validation
+  retrieval_save_path: saved_models/retrieval/
+
+retrieval:
+  model:
+    name: klue/bert-base
+  
+  tokenizer:
+    max_question_length: 64
+    max_context_length: 512
+  
+  train:
+    max_epoch: 10
+    batch_size: 8
+    learning_rate: 1e-5
+    weight_decay: 0.01
+    optimizer: adamw
+    gradient_accumulation_steps: 1
+    eval_step: 50
+
+
+
+dataloader:
+  shuffle: True
+  train_ratio: 0.8
+  architecture: BaseDataloader
+
+model:
+  retrieval_name: klue/bert-base
+  architecture: BaseModel
+
+tokenizer:
+  new_tokens: []
+  new_special_tokens: []
+  max_question_length: 64
+  max_context_length: 512
+  max_length: 256
+  syllable: False
+
+train:
+  max_epoch: 1
+  batch_size: 64
+  learning_rate: 1e-5
+  loss: ce
+  label_smoothing: 0.1
+  use_frozen: False
+  print_val_cm: True
+  print_test_cm: True
+  optimizer: AdamW
+  scheduler: StepLR
+  
+utils:
+  seed: 42
+  monitor: val_f1
+  patience: 25
+  top_k: 3
+  precision: 32 # 16(fp-16) is also possible
+  on_step: True # whether to log val/test metrics step-wise. Train metrics will automatcially be logged step-wise. 
+
+k_fold:
+  use_k_fold: False
+  num_folds: 3
+
+ensemble:
+  use_ensemble: False
+  architecture: EnsembleVotingModel
+  ckpt_paths: []
+
+wandb:
+  use: False
+  team_account_name: next-level-potato # 팀 계정
+  project_repo: ODQA  # 프로젝트 레포 이름
+  name: kbh # 실험자 명
+  info: 삭제 # 실험명
