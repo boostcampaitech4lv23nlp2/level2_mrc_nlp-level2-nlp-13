@@ -20,18 +20,11 @@ optimizer: # default AdamW
   lr_scheduler_type: linear
   warmup_ratio: 0.5
 
-criterion:
-  nmae: ce
-
 train:
   output_dir: # default: saved_models/model/{wandb_name}_{time}
   num_train_epochs: 5
-  do_train: True
-  do_eval: True
-  do_predict: False
-  overwrite_output_dir: False
   fp16: False
-  save_strategy : epoch
+  save_strategy : steps
   save_steps: 500
   save_total_limit: 1 # default 1: save the last and the best
   load_best_model_at_end: False 
@@ -45,5 +38,5 @@ utils:
 wandb:
   team: next-level-potato # team account name
   project: MRC # project name
-  name: LWJ # 실험자 명
+  name: # 실험자 명
   tags: [] # tag
