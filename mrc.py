@@ -70,7 +70,7 @@ class MRC:
             compute_metrics=self.compute_metrics,
         )
 
-    def train(self, checkpoint):
+    def train(self, checkpoint=None):
         train_result = self.trainer.train()  ### resume_from_checkpoint
         self.trainer.save_model()  # Saves the tokenizer too for easy upload
 
