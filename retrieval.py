@@ -82,8 +82,7 @@ class DenseRetrieval:
                 )
                 torch.cuda.empty_cache()
                 del item
-            self.passage_embedding_vectors = torch.Tensor(self.passage_embedding_vectors).squeeze()
-            print(self.passage_embedding_vectors.shape)  # (56737, 768)
+            self.passage_embedding_vectors = torch.Tensor(self.passage_embedding_vectors).squeeze()  # (56737, 768)
 
             with open("./saved_models/retrieval/passage_embedding_vectors.bin", "wb") as f:
                 pickle.dump(self.passage_embedding_vectors, f)
@@ -91,7 +90,7 @@ class DenseRetrieval:
 
     def retrieve(self, query_or_dataset: Union[str, Dataset], top_k: int = 10):
         assert self.passage_embedding_vectors is not None, "Passage embedding vectors is None. Please run get_dense_passage_embedding() first."
-
+        print("✅ retrieve start")
         if isinstance(query_or_dataset, str):
             doc_scores, doc_ids = self.get_relevant_doc(query_or_dataset, top_k)
 
@@ -102,6 +101,8 @@ class DenseRetrieval:
             return (doc_scores, [self.context[doc_ids[i]] for i in range(len(doc_ids))])
 
         elif isinstance(query_or_dataset, Dataset):
+            correct_cnt = 0
+            is_val = False
             total = []
             with timer("query exhaustive search"):
                 doc_scores, doc_ids = self.get_relevant_doc_bulk(query_or_dataset["question"], top_k)
@@ -115,18 +116,24 @@ class DenseRetrieval:
                     "context": " ".join([self.contexts[pid] for pid in doc_ids[idx]]),
                 }
                 if "context" in example.keys() and "answers" in example.keys():
+                    is_val = True
                     # validation 데이터를 사용하면 ground_truth context와 answer도 반환합니다.
                     tmp["original_context"] = example["context"]
                     tmp["answers"] = example["answers"]
+
+                    if tmp["original_context"] in tmp["context"]:
+                        correct_cnt += 1
                 total.append(tmp)
             cqas = pd.DataFrame(total)
+            if is_val == True:
+                print(f"Validation Accuracy: {correct_cnt / len(query_or_dataset) * 100:.2f}%")
             return cqas
 
     def get_relevant_doc(self, query, top_k):
         q_seqs = self.tokenizer(
             [query], max_length=self.config.retrieval.tokenizer.max_question_length, padding="max_length", truncation=True, return_tensors="pt"
         ).to("cuda")
-        q_emb = self.q_encoder(**q_seqs).detach().cpu()  # (1, 768)
+        q_emb = self.q_encoder(**q_seqs)  # (1, 768)
 
         sim_score = torch.matmul(q_emb, torch.transpose(self.passage_embedding_vectors, 0, 1))  # (1, 56737)
 
@@ -138,18 +145,21 @@ class DenseRetrieval:
         return doc_ids, doc_scores
 
     def get_relevant_doc_bulk(self, queries, top_k):
+        print("✅ get_relevant_doc_bulk start")
         q_seqs = self.tokenizer(
             queries, max_length=self.config.retrieval.tokenizer.max_question_length, padding="max_length", truncation=True, return_tensors="pt"
-        ).to("cuda")
+        )
+        print("✅ q_seqs done")
         q_dataset = DenseRetrievalDataset(
             input_ids=q_seqs["input_ids"], attention_mask=q_seqs["attention_mask"], token_type_ids=q_seqs["token_type_ids"]
         )
+        print("✅ q_dataset done")
         q_dataloader = torch.utils.data.DataLoader(q_dataset, batch_size=1)
 
         doc_ids = []
         doc_scores = []
         for item in tqdm(q_dataloader):
-            q_embs = self.q_encoder(input_ids=item[0], attention_mask=item[1], token_type_ids=item[2]).detach().cpu()
+            q_embs = self.q_encoder(input_ids=item[0], attention_mask=item[1], token_type_ids=item[2])
             for q_emb in q_embs:
                 sim_scores = torch.matmul(q_emb, torch.transpose(self.passage_embedding_vectors, 0, 1))
                 rank = torch.argsort(sim_scores, dim=0, descending=True)
@@ -520,9 +530,9 @@ if __name__ == "__main__":
     # dataset을 넣어주어야 함
     ## test data일 경우와 train data일 경우 출력되는게 다름
     dataset = load_from_disk("./data/train_dataset/validation")
-    df = retrieval.retrieve(dataset["validation"], top_k=10)
+    df = retrieval.retrieve(dataset, top_k=10)
 
-    pd.save_csv(df, "result.csv")
+    df.to_csv("result.csv", index=False, encoding="utf-8-sig")
 
     # ✅
     # import argparse
