@@ -33,6 +33,8 @@ train:
   fp16: False
   save_strategy : epoch
   save_steps: 500
+  save_total_limit: 1 # default 1: save the last and the best
+  load_best_model_at_end: False 
 
 utils:
   seed: 42
