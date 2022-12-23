@@ -71,7 +71,8 @@ def postprocess_qa_predictions(
         examples: 전처리 되지 않은 데이터셋 (see the main script for more information).
         features: 전처리가 진행된 데이터셋 (see the main script for more information).
         predictions (:obj:`Tuple[np.ndarray, np.ndarray]`):
-            모델의 예측값 :start logits과 the end logits을 나타내는 two arrays              첫번째 차원은 :obj:`features`의 element와 갯수가 맞아야함.
+            모델의 예측값 :start logits과 the end logits을 나타내는 two arrays
+            첫번째 차원은 :obj:`features`의 element와 갯수가 맞아야함.
         version_2_with_negative (:obj:`bool`, `optional`, defaults to :obj:`False`):
             정답이 없는 데이터셋이 포함되어있는지 여부를 나타냄
         n_best_size (:obj:`int`, `optional`, defaults to 20):
@@ -125,7 +126,7 @@ def postprocess_qa_predictions(
 
         # 현재 example에 대한 모든 feature 생성합니다.
         for feature_index in feature_indices:
-            # 각 featureure에 대한 모든 prediction을 가져옵니다.
+            # 각 feature에 대한 모든 prediction을 가져옵니다.
             start_logits = all_start_logits[feature_index]
             end_logits = all_end_logits[feature_index]
             # logit과 original context의 logit을 mapping합니다.
@@ -145,7 +146,6 @@ def postprocess_qa_predictions(
 
             # `n_best_size`보다 큰 start and end logits을 살펴봅니다.
             start_indexes = np.argsort(start_logits)[-1 : -n_best_size - 1 : -1].tolist()
-
             end_indexes = np.argsort(end_logits)[-1 : -n_best_size - 1 : -1].tolist()
 
             for start_index in start_indexes:
@@ -265,24 +265,23 @@ def postprocess_qa_predictions(
 
 def check_sanity(
     config,
-    datasets: DatasetDict,
     tokenizer,
 ) -> Tuple[Any, int]:
 
-    # last checkpoint 찾기.
-    last_checkpoint = None
-    if os.path.isdir(config.train.output_dir) and config.train.do_train and not config.train.overwrite_output_dir:
-        last_checkpoint = get_last_checkpoint(config.train.output_dir)
-        if last_checkpoint is None and len(os.listdir(config.train.output_dir)) > 0:
-            raise ValueError(
-                f"Output directory ({config.train.output_dir}) already exists and is not empty. "
-                "Configure --overwrite_output_dir as True to overcome."
-            )
-        elif last_checkpoint is not None:
-            logger.info(
-                f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
-                "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
-            )
+    # # last checkpoint 찾기.
+    # last_checkpoint = None
+    # if os.path.isdir(config.train.output_dir) and config.train.do_train and not config.train.overwrite_output_dir:
+    #     last_checkpoint = get_last_checkpoint(config.train.output_dir)
+    #     if last_checkpoint is None and len(os.listdir(config.train.output_dir)) > 0:
+    #         raise ValueError(
+    #             f"Output directory ({config.train.output_dir}) already exists and is not empty. "
+    #             "Configure --overwrite_output_dir as True to overcome."
+    #         )
+    #     elif last_checkpoint is not None:
+    #         logger.info(
+    #             f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
+    #             "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
+    #         )
 
     # Tokenizer check: 해당 script는 Fast tokenizer를 필요로합니다.
     if not isinstance(tokenizer, PreTrainedTokenizerFast):
@@ -299,10 +298,8 @@ def check_sanity(
         )
         config.tokenizer.max_length = tokenizer.model_max_length
 
-    if "validation" not in datasets:
-        raise ValueError("--do_eval requires a validation dataset")
-
     if "roberta" in config.model.name and config.tokenizer.return_token_type_ids == True:
         raise ValueError("Roberta models do not require token_type_ids")
 
-    return last_checkpoint
+    elif "roberta" not in config.model.name and config.tokenizer.return_token_type_ids == False:
+        raise ValueError(f"{config.model.name} requires token_type_ids=True")

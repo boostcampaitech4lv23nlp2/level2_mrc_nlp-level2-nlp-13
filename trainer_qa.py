@@ -30,7 +30,7 @@ if is_torch_tpu_available():
 class QuestionAnsweringTrainer(Trainer):
     def __init__(self, *args, eval_examples=None, post_process_function=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.eval_examples = eval_examples
+        self.eval_examples = eval_examples  # (un-processed) primitive eval_dataset
         self.post_process_function = post_process_function
 
     def evaluate(self, eval_dataset=None, eval_examples=None, ignore_keys=None):
@@ -60,9 +60,7 @@ class QuestionAnsweringTrainer(Trainer):
             )
 
         if self.post_process_function is not None and self.compute_metrics is not None:
-            eval_preds = self.post_process_function(
-                eval_examples, eval_dataset, output.predictions, self.args
-            )
+            eval_preds = self.post_process_function(eval_examples, eval_dataset, output.predictions)
             metrics = self.compute_metrics(eval_preds)
 
             self.log(metrics)
@@ -73,9 +71,7 @@ class QuestionAnsweringTrainer(Trainer):
             # tpu-comment: PyTorch/XLA에 대한 Logging debug metrics (compile, execute times, ops, etc.)
             xm.master_print(met.metrics_report())
 
-        self.control = self.callback_handler.on_evaluate(
-            self.args, self.state, self.control, metrics
-        )
+        self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, metrics)
         return metrics
 
     def predict(self, test_dataset, test_examples, ignore_keys=None):
@@ -106,7 +102,5 @@ class QuestionAnsweringTrainer(Trainer):
                 columns=list(test_dataset.features.keys()),
             )
 
-        predictions = self.post_process_function(
-            test_examples, test_dataset, output.predictions, self.args
-        )
+        predictions = self.post_process_function(test_examples, test_dataset, output.predictions, self.args)
         return predictions
