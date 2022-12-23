@@ -80,3 +80,24 @@ class DenseRetrievalValidDataset(Dataset):
             data_context = list(dict.fromkeys(w["text"] for w in wiki.values()))
             p_seqs = self.tokenizer(data_context, padding="max_length", max_length=self.max_context_length, truncation=True, return_tensors="pt")
             return p_seqs
+
+
+class DenseRetrievalDataset(Dataset):
+    """
+    inference 시 받을 queries을 위한 데이터셋
+    """
+
+    def __init__(self, input_ids, attention_mask, token_type_ids):
+        self.input_ids = input_ids
+        self.attention_mask = attention_mask
+        self.token_type_ids = token_type_ids
+
+    def __len__(self):
+        return self.input_ids.size(0)
+
+    def __getitem__(self, idx):
+        return (
+            self.input_ids[idx],
+            self.attention_mask[idx],
+            self.token_type_ids[idx],
+        )
