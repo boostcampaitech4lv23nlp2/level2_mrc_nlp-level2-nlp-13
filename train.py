@@ -23,11 +23,8 @@ from utils_qa import check_sanity, postprocess_qa_predictions
 logger = logging.getLogger(__name__)
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", "-c", type=str, default="base_config")
-    # parser.add_argument("--mode", "-m", default="train")
-    args, _ = parser.parse_known_args()
+def main(args):
+
     config = OmegaConf.load(f"./config/{args.config}.yaml")
 
     # wandb 설정
@@ -85,7 +82,7 @@ def run_mrc(
     datasets: DatasetDict,
     tokenizer,
     model,
-) -> NoReturn:
+) -> None:
 
     # dataset을 전처리합니다.
     # training과 evaluation에서 사용되는 전처리는 아주 조금 다른 형태를 가집니다.
@@ -318,4 +315,7 @@ def run_mrc(
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", "-c", type=str, default="base_config")
+    args, _ = parser.parse_known_args()
+    main(args)
