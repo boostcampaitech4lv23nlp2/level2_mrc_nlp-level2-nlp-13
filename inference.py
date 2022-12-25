@@ -42,6 +42,8 @@ def main(args):
         trained_model = config.model.name
         if trained_model.startswith("./saved_models"):
             trained_model = trained_model.replace("./saved_models/", "")  # dropping "saved_models/" for sake of saving
+        elif trained_model.startswith("saved_models"):
+            trained_model = trained_model.replace("saved_models/", "")
         config.train.output_dir = os.path.join("predictions", trained_model, now_time)
         print(f"You can find the outputs in {config.train.output_dir}")
     training_args = TrainingArguments(**config.train)
@@ -107,7 +109,9 @@ def run_sparse_retrieval(
         data_path=data_path,
         context_path=config.path.context,
     )
-    retriever.get_sparse_embedding()
+    retriever.get_sparse_embedding(
+        n_lsa_features=config.retriever.sparse.lsa_num_features if config.retriever.sparse.lsa_num_features is not None else 0
+    )
     retriever.build_faiss(num_clusters=config.retriever.faiss.num_clusters)
     df = retriever.retrieve_faiss(datasets["validation"], topk=config.retriever.topk)
 

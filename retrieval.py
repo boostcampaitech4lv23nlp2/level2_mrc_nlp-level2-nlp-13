@@ -66,8 +66,8 @@ class SparseRetrieval:
             ngram_range=(1, 2),
             max_features=50000,
         )
-        self.lsa_vectorizer = None
-        if apply_lsa == True:
+        self.apply_lsa = apply_lsa
+        if self.apply_lsa is True:
             self.lsa_vectorizer = TruncatedSVD(
                 n_components=100,
                 algorithm="arpack",
@@ -76,7 +76,7 @@ class SparseRetrieval:
         self.p_embedding = None  # get_sparse_embedding()로 생성합니다
         self.indexer = None  # build_faiss()로 생성합니다.
 
-    def get_sparse_embedding(self) -> None:
+    def get_sparse_embedding(self, n_lsa_features=0) -> None:
 
         """
         Summary:
@@ -88,8 +88,8 @@ class SparseRetrieval:
         # Pickle을 저장합니다.
         pickle_name = f"sparse_embeddings.bin"
         tfidf_vectorizer_name = f"tfidf_vectorizer.bin"
-        lsa_vectorizer_name = f"lsa_vectorizer.bin"
-        context_lsa_name = "sparse_lsa_embeddings.bin"
+        lsa_vectorizer_name = f"lsa_vectorizer_{n_lsa_features}.bin"
+        context_lsa_name = f"sparse_lsa_embeddings_{n_lsa_features}.bin"
 
         emd_path = os.path.join(self.data_path, pickle_name)
         tfidfv_path = os.path.join(self.data_path, tfidf_vectorizer_name)
@@ -101,27 +101,37 @@ class SparseRetrieval:
                 self.p_embedding = pickle.load(file)
             with open(tfidfv_path, "rb") as file:
                 self.tfidf_vectorizer = pickle.load(file)
-            if self.lsa_vectorizer is not None:
-                with open(lsav_path, "rb") as file:
-                    self.lsa_vectorizer = pickle.load(file)
-                with open(lsa_emd_path, "rb") as file:
-                    self.lsa_embedding = pickle.load(file)
+
+            if self.apply_lsa is True:
+                if os.path.isfile(lsav_path):
+                    with open(lsav_path, "rb") as file:
+                        self.lsa_vectorizer = pickle.load(file)
+                    with open(lsa_emd_path, "rb") as file:
+                        self.lsa_embedding = pickle.load(file)
+                else:
+                    self.lsa_embedding = self.lsa_vectorizer.fit_transform(self.p_embedding)
+                    with open(lsav_path, "wb") as file:
+                        pickle.dump(self.lsa_vectorizer, file)
+                    with open(lsa_emd_path, "wb") as file:
+                        pickle.dump(self.lsa_embedding, file)
 
             print("Embedding pickle load.")
+
         else:
             print("Build passage embedding")
             self.p_embedding = self.tfidf_vectorizer.fit_transform(self.contexts)
-            print(f"tf-idf context embedding vector shape: {self.p_embedding.shape}") # (56737, 50000)
+            print(f"tf-idf context embedding vector shape: {self.p_embedding.shape}")  # (56737, 50000)
             with open(emd_path, "wb") as file:
                 pickle.dump(self.p_embedding, file)
             with open(tfidfv_path, "wb") as file:
                 pickle.dump(self.tfidf_vectorizer, file)
-            if self.lsa_vectorizer is not None:
+
+            if self.apply_lsa is True:
                 self.lsa_embedding = self.lsa_vectorizer.fit_transform(self.p_embedding)
                 with open(lsav_path, "wb") as file:
                     pickle.dump(self.lsa_vectorizer, file)
                 with open(lsa_emd_path, "wb") as file:
-                    pickle.dump(self.lsa_emd_path, file)
+                    pickle.dump(self.lsa_embedding, file)
 
             print("Embedding pickle saved.")
 
