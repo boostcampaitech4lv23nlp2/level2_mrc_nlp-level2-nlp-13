@@ -1,0 +1,42 @@
+path:
+  train: ../data/train_dataset
+  predict: ../data/test_dataset
+
+model:
+  name: klue/roberta-base
+
+tokenizer:
+  max_length: 256
+  padding: max_length
+  stride: 128
+  return_token_type_ids: False # False for Roberta models
+
+optimizer: # default AdamW
+  learning_rate: 1e-5
+  weight_decay: 0
+  adam_beta1: 0.9 # The beta1 hyperparameter for the AdamW optimizer.
+  adam_beta2: 0.999 # The beta2 hyperparameter for the AdamW optimizer.
+  adam_epsilon: 1e-8 # The epsilon hyperparameter for the AdamW optimizer.
+  lr_scheduler_type: linear
+  warmup_ratio: 0.5
+
+train:
+  output_dir: # default: saved_models/model/{wandb_name}_{time}
+  num_train_epochs: 5
+  fp16: False
+  save_strategy : steps
+  save_steps: 500
+  save_total_limit: 1 # default 1: save the last and the best
+  load_best_model_at_end: False 
+
+utils:
+  seed: 42
+  num_workers: 4
+  overwrite_cache: False
+  max_answer_length: 30
+
+wandb:
+  team: next-level-potato # team account name
+  project: MRC # project name
+  name: # 실험자 명
+  tags: [] # tag
