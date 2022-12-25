@@ -70,10 +70,9 @@ def main(args):
         tokenizer,
         model,
         datasets["train"],
-        datasets["validation"],
     )
     reader.train()
-    reader.evaluate()
+    reader.evaluate(datasets["validation"])
 
 
 if __name__ == "__main__":

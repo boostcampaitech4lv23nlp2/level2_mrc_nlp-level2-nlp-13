@@ -4,7 +4,7 @@ import omegaconf
 
 from typing import Optional, Union
 from dataclasses import dataclass, field
-from datasets import DatasetDict, load_metric
+from datasets import Dataset, load_metric
 from trainer_qa import QuestionAnsweringTrainer
 from transformers import (
     AutoModelForQuestionAnswering,
@@ -24,14 +24,12 @@ class MRC:
     training_args: TrainingArguments
     tokenizer: AutoTokenizer
     model: AutoModelForQuestionAnswering
-    train_dataset: Optional[DatasetDict] = None
-    eval_dataset: Optional[DatasetDict] = None
-    test_dataset: Optional[DatasetDict] = None
-
-    check_sanity(config, tokenizer)
-    # checkpoint = get_last_checkpoint
+    train_dataset: Optional[Dataset] = None
 
     def __post_init__(self):
+        check_sanity(self.config, self.tokenizer)
+        # checkpoint = get_last_checkpoint
+
         if self.train_dataset:
             self.train_dataset = self.train_dataset.map(
                 self.prepare_train_features,
@@ -41,17 +39,6 @@ class MRC:
                 load_from_cache_file=not self.config.utils.overwrite_cache,
             )
 
-        self.eval_dataset_original = None
-        if self.eval_dataset:
-            self.eval_dataset_original = self.eval_dataset  # to be used as examples for trainer.evaluate()
-            self.eval_dataset = self.eval_dataset.map(
-                self.prepare_validation_features,
-                batched=True,
-                num_proc=self.config.utils.num_workers,
-                remove_columns=self.eval_dataset.column_names,
-                load_from_cache_file=not self.config.utils.overwrite_cache,
-            )
-            assert len(self.eval_dataset_original) != len(self.eval_dataset)
         # Data collator
         # flag가 True이면 이미 max length로 padding된 상태입니다.
         # 그렇지 않다면 data collator에서 padding을 진행해야합니다.
@@ -62,8 +49,6 @@ class MRC:
             model=self.model,
             args=self.training_args,
             train_dataset=self.train_dataset,
-            eval_dataset=self.eval_dataset,
-            eval_examples=self.eval_dataset_original,
             tokenizer=self.tokenizer,
             data_collator=data_collator,
             post_process_function=self.post_processing_function,
@@ -92,13 +77,43 @@ class MRC:
         # State 저장
         self.trainer.state.save_to_json(os.path.join(self.training_args.output_dir, "trainer_state.json"))
 
-    def evaluate(self, eval_dataset=None, eval_examples=None, ignore_keys=None):
+    def evaluate(self, eval_dataset, ignore_keys=None):
         logger.info("*** Evaluate ***")
-        metrics = self.trainer.evaluate(eval_dataset, eval_examples, ignore_keys)
+        self.eval_dataset = eval_dataset
+        self.eval_dataset = self.eval_dataset.map(
+            self.prepare_validation_features,
+            batched=True,
+            num_proc=self.config.utils.num_workers,
+            remove_columns=self.eval_dataset.column_names,
+            load_from_cache_file=not self.config.utils.overwrite_cache,
+        )
+        assert len(self.eval_dataset) != len(eval_dataset)
+
+        metrics = self.trainer.evaluate(
+            eval_dataset=self.eval_dataset,  # preprocessed
+            eval_examples=eval_dataset,  # unprocessed
+            ignore_keys=ignore_keys,
+        )
         metrics["eval_samples"] = len(self.eval_dataset)
 
         self.trainer.log_metrics("eval", metrics)
         self.trainer.save_metrics("eval", metrics)
+
+    def predict(self, predict_dataset, ignore_keys=None):
+        logger.info("*** Predict ***")
+        self.predict_dataset = predict_dataset
+        self.predict_dataset = self.predict_dataset.map(
+            self.prepare_validation_features,
+            batched=True,
+            num_proc=self.config.utils.num_workers,
+            remove_columns=self.predict_dataset.column_names,
+            load_from_cache_file=not self.config.utils.overwrite_cache,
+        )
+        self.trainer.predict(
+            predict_dataset=self.predict_dataset,
+            predict_examples=predict_dataset,
+            ignore_keys=ignore_keys,
+        )
 
     def prepare_train_features(self, examples):
         """
@@ -164,7 +179,10 @@ class MRC:
 
     def prepare_validation_features(self, examples):
         pad_on_right = self.tokenizer.padding_side == "right"
-        column_names = self.eval_dataset.column_names
+        try:
+            column_names = self.eval_dataset.column_names
+        except:
+            column_names = self.predict_dataset.column_names
         question_column_name = "question" if "question" in column_names else column_names[0]
         context_column_name = "context" if "context" in column_names else column_names[1]
 
