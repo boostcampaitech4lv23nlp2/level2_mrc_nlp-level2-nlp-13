@@ -1,18 +1,12 @@
 import logging
 import os
-import omegaconf
-
-from typing import Optional, Union
 from dataclasses import dataclass, field
+from typing import Optional, Union
+
+import omegaconf
 from datasets import DatasetDict, load_metric
 from trainer_qa import QuestionAnsweringTrainer
-from transformers import (
-    AutoModelForQuestionAnswering,
-    AutoTokenizer,
-    DataCollatorWithPadding,
-    EvalPrediction,
-    TrainingArguments,
-)
+from transformers import AutoModelForQuestionAnswering, AutoTokenizer, DataCollatorWithPadding, EvalPrediction, TrainingArguments
 from utils_qa import check_sanity, postprocess_qa_predictions
 
 logger = logging.getLogger(__name__)
