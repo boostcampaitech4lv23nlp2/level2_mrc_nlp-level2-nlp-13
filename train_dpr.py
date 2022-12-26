@@ -1,14 +1,18 @@
+import argparse
+import datetime
 import logging
 import os
 import sys
-import argparse
-import wandb
-import pytz
-import datetime
-from omegaconf import OmegaConf
-from model.Retrieval.BertEncoder import BertEncoder
 
+import pytz
+import torch
+from omegaconf import OmegaConf
 from transformers import AutoTokenizer, TrainingArguments, set_seed
+
+import wandb
+from dataset.DPR_Dataset import DenseRetrievalTrainDataset, DenseRetrievalValidDataset
+from model.Retrieval.BertEncoder import BertEncoder
+from trainer.DenseRetrievalTrainer import DenseRetrievalTrainer
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +33,15 @@ def main(config):
     config.DPR.train.update(config.DPR.optimizer)
     if config.DPR.train.output_dir is None:
         config.DPR.train.output_dir = os.path.join("saved_models/DPR", config.DPR.model.name, run_id)
-    training_args = TrainingArguments(**config.DPR.train)
-    training_args.report_to = ["wandb"]
+    # training_args.report_to = ["wandb"]
 
     # logging 설정
+    if not os.path.exists("./logs"):
+        os.makedirs("./logs")
+        with open("./logs/DPR_logs.log", "w+") as f:
+            f.write("***** Logging *****\n")
     logging.basicConfig(
-        format="%(asctime)s - %(levelname)s - %(name)s -    %(message)s",
+        format="%(asctime)s - %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
         handlers=[logging.StreamHandler(sys.stdout)],
     )
@@ -45,17 +52,50 @@ def main(config):
     # 모델을 초기화하기 전에 난수를 고정합니다.
     set_seed(config.utils.seed)
 
-    # 데이터셋
-
     # 토크나이저
+    tokenizer = AutoTokenizer.from_pretrained(config.DPR.model.name)
+
+    # 데이터셋
+    train_dataset = DenseRetrievalTrainDataset(
+        data_path=config.DPR.path.train,
+        max_context_length=config.DPR.tokenizer.max_context_length,
+        max_question_length=config.DPR.tokenizer.max_question_length,
+        tokenizer=tokenizer,
+    )
+    valid_dataset = DenseRetrievalValidDataset(
+        data_path=config.DPR.path.valid,
+        max_context_length=config.DPR.tokenizer.max_context_length,
+        tokenizer=tokenizer,
+    )
+    logger.info("  train_dataset", len(train_dataset), "valid_dataset", len(valid_dataset))
 
     # 모델
+    logger.info("  Encoder model", config.DPR.model.name)
+    p_encoder = BertEncoder.from_pretrained(config.DPR.model.name)
+    q_encoder = BertEncoder.from_pretrained(config.DPR.model.name)
+    if torch.cuda.is_available():
+        p_encoder.cuda()
+        q_encoder.cuda()
 
     # 학습
+    training_args = TrainingArguments(
+        output_dir=config.DPR.train.output_dir,
+        evaluation_strategy="epoch",
+        learning_rate=config.DPR.optimizer.learning_rate,
+        per_device_train_batch_size=config.DPR.train.batch_size,
+        per_device_eval_batch_size=config.DPR.train.batch_size,
+        num_train_epochs=config.DPR.train.num_train_epochs,
+        weight_decay=config.DPR.optimizer.weight_decay,
+        gradient_accumulation_steps=config.DPR.optimizer.gradient_accumulation_steps,
+    )
+    training_args.report_to = ["wandb"]
+
+    trainer = DenseRetrievalTrainer(training_args, config, tokenizer, p_encoder, q_encoder, train_dataset, valid_dataset)
+    trainer.train()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", "-c", type=str, default="base_config")
+    parser.add_argument("--config", "-c", type=str, default="custom_config")
     args, _ = parser.parse_known_args()
     main(args)
