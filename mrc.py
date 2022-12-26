@@ -28,10 +28,10 @@ class MRC:
     eval_dataset: Optional[DatasetDict] = None
     test_dataset: Optional[DatasetDict] = None
 
-    check_sanity(config, tokenizer)
-    # checkpoint = get_last_checkpoint
-
     def __post_init__(self):
+        check_sanity(self.config, self.tokenizer)
+        # checkpoint = get_last_checkpoint
+
         if self.train_dataset:
             self.train_dataset = self.train_dataset.map(
                 self.prepare_train_features,
