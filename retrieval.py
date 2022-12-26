@@ -67,6 +67,7 @@ class SparseRetrieval:
             max_features=50000,
         )
         self.apply_lsa = apply_lsa
+        self.lsa_vectorizer = None
         if self.apply_lsa is True:
             self.lsa_vectorizer = TruncatedSVD(
                 n_components=100,
