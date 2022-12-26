@@ -71,7 +71,7 @@ def main(args):
         model,
         datasets["train"],
     )
-    reader.train()
+    reader.train(checkpoint=config.path.resume)
     reader.evaluate(datasets["validation"])
 
 

@@ -56,7 +56,7 @@ class MRC:
         )
 
     def train(self, checkpoint=None):
-        train_result = self.trainer.train()  ### resume_from_checkpoint
+        train_result = self.trainer.train(resume_from_checkpoint=checkpoint)
         self.trainer.save_model()  # Saves the tokenizer too for easy upload
 
         metrics = train_result.metrics
@@ -71,7 +71,7 @@ class MRC:
         with open(output_train_file, "w") as writer:
             logger.info("***** Train results *****")
             for key, value in sorted(train_result.metrics.items()):
-                logger.info(f"  {key} = {value}")
+                logger.info(f"{key} = {value}")
                 writer.write(f"{key} = {value}\n")
 
         # State 저장
