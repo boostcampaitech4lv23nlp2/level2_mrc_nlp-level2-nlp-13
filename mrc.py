@@ -25,6 +25,8 @@ class MRC:
     tokenizer: AutoTokenizer
     model: AutoModelForQuestionAnswering
     train_dataset: Optional[Dataset] = None
+    eval_dataset: Optional[Dataset] = None
+    predict_dataset: Optional[Dataset] = None
 
     def __post_init__(self):
         check_sanity(self.config, self.tokenizer)
@@ -230,7 +232,9 @@ class MRC:
         elif self.eval_dataset:
             column_names = self.eval_dataset.column_names
             answer_column_name = "answers" if "answers" in column_names else column_names[2]
-            references = [{"id": example["id"], "answers": example[answer_column_name]} for example in self.eval_dataset_originl]
+            ex = examples[0]
+            print(ex)
+            references = [{"id": example["id"], "answers": example[answer_column_name]} for example in examples]
             return EvalPrediction(predictions=formatted_predictions, label_ids=references)
 
     def compute_metrics(self, p: EvalPrediction):
