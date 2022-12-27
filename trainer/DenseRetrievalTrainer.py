@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import pickle
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -12,6 +13,7 @@ from torch.utils.data import DataLoader, RandomSampler, TensorDataset
 from tqdm import tqdm, trange
 from transformers import get_linear_schedule_with_warmup
 
+warnings.filterwarnings("ignore")
 logger = logging.getLogger(__name__)
 
 
@@ -140,7 +142,7 @@ class DenseRetrievalTrainer:
                 # top_k Accuracy 계산
                 if valid_context[idx] in top_10_passages:
                     top_10 += 1
-                    checking_df = checking_df.concat(
+                    checking_df = checking_df.append(
                         {
                             "question": query,
                             "answer_context": valid_context[idx],
@@ -148,17 +150,6 @@ class DenseRetrievalTrainer:
                             "is_in": 1,
                         },
                         ignore_index=True,
-                        axis=1,
-                    )
-                    checking_df = checking_df.concat(
-                        {
-                            "question": query,
-                            "answer_context": valid_context[idx],
-                            "top_10": top_10_passages,
-                            "is_in": 1,
-                        },
-                        ignore_index=True,
-                        axis=1,
                     )
                 if valid_context[idx] not in top_10_passages:
                     checking_df = checking_df.append(
