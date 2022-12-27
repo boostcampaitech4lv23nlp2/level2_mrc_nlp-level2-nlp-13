@@ -25,8 +25,6 @@ class MRC:
     tokenizer: AutoTokenizer
     model: AutoModelForQuestionAnswering
     train_dataset: Optional[Dataset] = None
-    eval_dataset: Optional[Dataset] = None
-    predict_dataset: Optional[Dataset] = None
 
     def __post_init__(self):
         check_sanity(self.config, self.tokenizer)
