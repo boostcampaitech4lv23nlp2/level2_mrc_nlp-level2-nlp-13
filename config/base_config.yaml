@@ -1,6 +1,17 @@
 path:
   train: ../data/train_dataset
   predict: ../data/test_dataset
+  context: ../data/wikipedia_documents.json
+  resume: 
+
+retriever:
+  type: sparse # sparse or dense
+  topk: 10
+  sparse:
+    lsa: True # apply LSA or not
+    lsa_num_features: 1024 # default: 100.
+  faiss:
+    num_clusters: 64 # default: 64. The number of clusters
 
 model:
   name: klue/roberta-base
@@ -31,7 +42,7 @@ train:
 
 utils:
   seed: 42
-  num_workers: 4
+  num_workers: 1
   overwrite_cache: False
   max_answer_length: 30
 
