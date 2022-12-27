@@ -230,10 +230,8 @@ class MRC:
             return formatted_predictions
 
         elif self.eval_dataset:
-            column_names = self.eval_dataset.column_names
+            column_names = examples.column_names
             answer_column_name = "answers" if "answers" in column_names else column_names[2]
-            ex = examples[0]
-            print(ex)
             references = [{"id": example["id"], "answers": example[answer_column_name]} for example in examples]
             return EvalPrediction(predictions=formatted_predictions, label_ids=references)
 
