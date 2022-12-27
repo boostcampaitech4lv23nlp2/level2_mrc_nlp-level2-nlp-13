@@ -1,6 +1,10 @@
 import json
+import re
 
+import numpy as np
+import pandas as pd
 from datasets import load_from_disk
+from rank_bm25 import BM25Okapi
 from torch.utils.data import Dataset
 
 
@@ -14,6 +18,10 @@ class DenseRetrievalTrainDataset(Dataset):
         self.max_question_length = max_question_length
         self.tokenizer = tokenizer
         self.preprocessed_data = self.preprocess(data_path)
+
+        df_wiki = pd.read_json("./data/wikipedia_documents.json").T
+        corpus = pd.DataFrame({"context": list(set([re.sub("[\\\\n|\\n]+", " ", example) for example in df_wiki["text"]]))})
+        self.bm25 = BM25Okapi(corpus)
 
     def __len__(self):
         return self.preprocessed_data[0]["input_ids"].size(0)
@@ -38,6 +46,21 @@ class DenseRetrievalTrainDataset(Dataset):
         q_seqs = self.tokenizer(data_question, padding="max_length", max_length=self.max_question_length, truncation=True, return_tensors="pt")
 
         return p_seqs, q_seqs
+
+    def best_sim_passage(self, query, tokenizer, corpus, k=3):
+        tokenized_query = tokenizer(query)
+
+        doc_scores = self.bm25.get_scores(tokenized_query)
+        indices = np.argsort(-doc_scores)[:k]
+        passages = self.bm25.get_top_n(tokenized_query, corpus, n=k)
+        # scores = doc_scores[np.argsort(-doc_scores)[:k]]
+
+        # df = pd.DataFrame({"index": indices, "passage": passages, "score": scores})
+        df = pd.DataFrame({"index": indices, "passage": passages})
+        temp = df[df["passage"] == query]["index"]
+        df = df[df["index"] != temp[0]]  # 정답 passage 제외
+
+        return df.iloc[0]  # 정답 passage를 제외한 passage 중 가장 유사도가 높은 passage
 
 
 class DenseRetrievalValidDataset(Dataset):
