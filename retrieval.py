@@ -1,6 +1,8 @@
 import json
+import logging
 import os
 import pickle
+import sys
 import time
 from contextlib import contextmanager
 from typing import List, NoReturn, Optional, Tuple, Union
@@ -13,11 +15,14 @@ from datasets import Dataset, concatenate_datasets, load_from_disk
 from omegaconf import OmegaConf
 from sklearn.feature_extraction.text import TfidfVectorizer
 from tqdm.auto import tqdm
+from transformers import AutoTokenizer
 
 from dataset.DPR_Dataset import DenseRetrievalDataset, DenseRetrievalValidDataset
 from model.Retrieval.BertEncoder import BertEncoder
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -46,11 +51,12 @@ class DenseRetrieval:
         self.ids = list(range(len(self.contexts)))
 
     def get_dense_passage_embedding(self):
-        print("🍕 get_dense_passage_embedding start")
+        logger.info("Get dense passage embedding")
         if os.path.isfile(f"./saved_models/DPR/passage_embedding_vectors/p_embs_epoch_{self.config.DPR.model.saved_p_embs_epoch}.bin"):
             with open(f"./saved_models/DPR/passage_embedding_vectors/p_embs_epoch_{self.config.DPR.model.saved_p_embs_epoch}.bin", "rb") as f:
                 self.passage_embedding_vectors = pickle.load(f)
-            print("🔥 Embedding pickle loaded")
+            logger.info("Embedding pickle loaded")
+
         else:
             print("no saved pickle file")
             self.passage_embedding_vectors = []
@@ -82,22 +88,22 @@ class DenseRetrieval:
 
             with open("./saved_models/DPR/passage_embedding_vectors/p_embs.bin", "wb") as f:
                 pickle.dump(self.passage_embedding_vectors, f)
-            print("🔥 Embedding pickle saved")
+            logger.info("Embedding pickle saved")
 
-    def retrieve(self, query_or_dataset: Union[str, Dataset], top_k: int = 10):
+    def retrieve(self, query_or_dataset: Union[str, Dataset], topk: Optional[int] = 10):
         """
         inference 할 때 사용
         """
         assert self.passage_embedding_vectors is not None, "Passage embedding vectors is None. Please run get_dense_passage_embedding() first."
-        print("✅ retrieve start")
+
         if isinstance(query_or_dataset, str):
-            doc_scores, doc_ids = self.get_relevant_doc(query_or_dataset, top_k)
+            doc_scores, doc_ids = self.get_relevant_doc(query_or_dataset, topk)
 
             for i in range(len(doc_scores)):
                 print(f"top {i + 1} : {doc_scores[i]:.4f}")
-                print(self.contexts[doc_ids[i]])
+                print(self.contexts[int(doc_ids[i])])
 
-            return (doc_scores, [self.context[doc_ids[i]] for i in range(len(doc_ids))])
+            return (doc_scores, [self.contexts[int(doc_ids[i])] for i in range(len(doc_ids))])
 
         elif isinstance(query_or_dataset, Dataset):
             correct_cnt = 0
@@ -105,7 +111,7 @@ class DenseRetrieval:
             total = []
 
             with timer("query exhaustive search"):
-                doc_scores, doc_ids = self.get_relevant_doc_bulk(query_or_dataset["question"], top_k)
+                doc_scores, doc_ids = self.get_relevant_doc_bulk(query_or_dataset["question"], topk)
 
             for idx, example in enumerate(tqdm(query_or_dataset, desc="Dense retrieval: ")):
                 tmp = {
@@ -129,9 +135,10 @@ class DenseRetrieval:
             cqas = pd.DataFrame(total)
             if is_val == True:
                 print(f"Validation Accuracy: {correct_cnt / len(query_or_dataset) * 100:.2f}%")
+                logger.info(f"Validation Accuracy: {correct_cnt / len(query_or_dataset) * 100:.2f}%")
             return cqas
 
-    def get_relevant_doc(self, query, top_k):
+    def get_relevant_doc(self, query, topk):
         q_seqs = self.tokenizer(
             [query], max_length=self.config.DPR.tokenizer.max_question_length, padding="max_length", truncation=True, return_tensors="pt"
         )
@@ -139,24 +146,20 @@ class DenseRetrieval:
 
         sim_scores = torch.matmul(q_emb, torch.transpose(self.passage_embedding_vectors, 0, 1))  # (1, 56737)
 
-        rank = torch.argsort(sim_scores, dim=1, descending=True)
-        doc_ids, doc_scores = [], []
+        rank = torch.argsort(sim_scores, dim=1, descending=True).squeeze()  # (56737)
 
-        doc_ids.append(rank[:top_k].tolist())
-        doc_scores.append(sim_scores[rank[:top_k]].tolist())
+        doc_ids = list(map(int, rank[:topk].tolist()))
+        doc_scores = sim_scores.squeeze()[doc_ids].tolist()
 
         return doc_ids, doc_scores
 
-    def get_relevant_doc_bulk(self, queries, top_k):
-        print("✅ get_relevant_doc_bulk start")
+    def get_relevant_doc_bulk(self, queries, topk):
         q_seqs = self.tokenizer(
             queries, max_length=self.config.DPR.tokenizer.max_question_length, padding="max_length", truncation=True, return_tensors="pt"
         )
-        print("✅ q_seqs done")
         q_dataset = DenseRetrievalDataset(
             input_ids=q_seqs["input_ids"], attention_mask=q_seqs["attention_mask"], token_type_ids=q_seqs["token_type_ids"]
         )
-        print("✅ q_dataset done")
         q_dataloader = torch.utils.data.DataLoader(q_dataset, batch_size=1)
 
         doc_ids = []
@@ -166,8 +169,8 @@ class DenseRetrieval:
             for q_emb in q_embs:
                 sim_scores = torch.matmul(q_emb, torch.transpose(self.passage_embedding_vectors, 0, 1))
                 rank = torch.argsort(sim_scores, dim=0, descending=True)
-                doc_ids.append(rank[:top_k].tolist())
-                doc_scores.append(sim_scores[rank[:top_k]].tolist())
+                doc_ids.append(rank[:topk].tolist())
+                doc_scores.append(sim_scores[rank[:topk]].tolist())
         return doc_scores, doc_ids
 
 
@@ -515,6 +518,18 @@ if __name__ == "__main__":
 
     config = OmegaConf.load(f"./config/{args.config}.yaml")
 
+    # logging 설정
+    if not os.path.exists("./logs"):
+        os.makedirs("./logs")
+        with open("./logs/DPR_logs.log", "w+") as f:
+            f.write("***** Log file Start *****\n")
+    logging.basicConfig(
+        filename="./logs/DPR_logs.log",
+        level=logging.INFO,
+        format="%(asctime)s - %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+    )
+    logger.info("***** retrieval.py *****")
     # Test sparse
     org_dataset = load_from_disk("./data/train_dataset")
     full_ds = concatenate_datasets(
@@ -528,7 +543,7 @@ if __name__ == "__main__":
 
     from transformers import AutoTokenizer
 
-    if config.retrieval == "sparse":
+    if config.retrieval.emb_type == "sparse":
         tokenizer = AutoTokenizer.from_pretrained(
             args.model_name_or_path,
             use_fast=False,
@@ -539,7 +554,7 @@ if __name__ == "__main__":
             data_path=args.data_path,
             context_path=args.context_path,
         )
-    elif config.retrieval == "dense":
+    elif config.retrieval.emb_type == "dense":
         retriever = DenseRetrieval(config)
         retriever.get_dense_passage_embedding()
 
@@ -560,8 +575,9 @@ if __name__ == "__main__":
 
     else:
         with timer("bulk query by exhaustive search"):
-            df = retriever.retrieve(full_ds)
+            df = retriever.retrieve(full_ds, topk=config.retrieval.topk)
             df["correct"] = df["original_context"] == df["context"]
+            df.to_csv(".results.csv", index=False, encoding="utf-8")  # 💥
             print(
                 "correct retrieval result by exhaustive search",
                 df["correct"].sum() / len(df),
