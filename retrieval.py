@@ -543,7 +543,7 @@ if __name__ == "__main__":
 
     from transformers import AutoTokenizer
 
-    if config.retrieval.emb_type == "sparse":
+    if config.retrieval.type == "sparse":
         tokenizer = AutoTokenizer.from_pretrained(
             args.model_name_or_path,
             use_fast=False,
@@ -554,7 +554,7 @@ if __name__ == "__main__":
             data_path=args.data_path,
             context_path=args.context_path,
         )
-    elif config.retrieval.emb_type == "dense":
+    elif config.retrieval.type == "dense":
         retriever = DenseRetrieval(config)
         retriever.get_dense_passage_embedding()
 
