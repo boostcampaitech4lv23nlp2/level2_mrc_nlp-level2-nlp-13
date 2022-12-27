@@ -28,7 +28,6 @@ class MRC:
 
     def __post_init__(self):
         check_sanity(self.config, self.tokenizer)
-        # checkpoint = get_last_checkpoint
 
         if self.train_dataset:
             self.train_dataset = self.train_dataset.map(
@@ -224,16 +223,15 @@ class MRC:
         )
         # Metric을 구할 수 있도록 Format을 맞춰줍니다.
         formatted_predictions = [{"id": k, "prediction_text": v} for k, v in predictions.items()]
-        if self.predict_dataset:
-            return formatted_predictions
 
-        elif self.eval_dataset:
-            column_names = self.eval_dataset.column_names
+        if self.eval_dataset:
+            column_names = examples.column_names
             answer_column_name = "answers" if "answers" in column_names else column_names[2]
-            ex = examples[0]
-            print(ex)
             references = [{"id": example["id"], "answers": example[answer_column_name]} for example in examples]
             return EvalPrediction(predictions=formatted_predictions, label_ids=references)
+
+        elif self.predict_dataset:
+            return formatted_predictions
 
     def compute_metrics(self, p: EvalPrediction):
         metric = load_metric("squad")
