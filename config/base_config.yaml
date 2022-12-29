@@ -1,6 +1,7 @@
 path:
   train: ../data/train_dataset
   predict: ../data/test_dataset
+  data: ../data/
   context: ../data/wikipedia_documents.json
   resume: 
 
@@ -8,16 +9,17 @@ retriever:
   type: sparse # sparse or dense
   topk: 10
   sparse:
+    tfidf_num_features: 50000 # default: 50000. max_num_features for tfidf vectorizer
     lsa: True # apply LSA or not
     lsa_num_features: 1024 # default: 100.
   faiss:
     num_clusters: 64 # default: 64. The number of clusters
 
 model:
-  name: klue/roberta-base
+  name: klue/roberta-base 
 
 tokenizer:
-  max_length: 256
+  max_length: 384
   padding: max_length
   stride: 128
   return_token_type_ids: False # False for Roberta models

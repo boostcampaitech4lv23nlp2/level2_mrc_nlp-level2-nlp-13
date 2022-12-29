@@ -25,7 +25,7 @@ class SparseRetrieval:
     def __init__(
         self,
         tokenize_fn,
-        apply_lsa,
+        args,
         data_path: Optional[str] = "../data/",
         context_path: Optional[str] = "../data/wikipedia_documents.json",
     ) -> None:
@@ -38,8 +38,11 @@ class SparseRetrieval:
                 - lambda x: x.split(' ')
                 - Huggingface Tokenizer
                 - konlpy.tag의 Mecab
-            apply_lsa:
-                truncatedSVD를 이용해 추가로 tf-idf vectors에 LSA(latent semnatic analysis)를 적용할지 선택할 수 있습니다.
+            args:
+                tfidf_num_features:
+                    tfidf 벡터 차원 크기
+                apply_lsa:
+                    truncatedSVD를 이용해 추가로 tf-idf vectors에 LSA(latent semnatic analysis)를 적용할지 선택할 수 있습니다.
             data_path:
                 데이터가 보관되어 있는 경로입니다.
 
@@ -61,16 +64,17 @@ class SparseRetrieval:
         self.ids = list(range(len(self.contexts)))
 
         # Transform by vectorizer
+        self.tfidf_num_features = args.tfidf_num_features
         self.tfidf_vectorizer = TfidfVectorizer(
             tokenizer=tokenize_fn,
             ngram_range=(1, 2),
-            max_features=50000,
+            max_features=self.tfidf_num_features,
         )
-        self.apply_lsa = apply_lsa
+        self.apply_lsa = args.lsa
         self.lsa_vectorizer = None
         if self.apply_lsa is True:
             self.lsa_vectorizer = TruncatedSVD(
-                n_components=100,
+                n_components=args.lsa_num_features,
                 algorithm="arpack",
             )
 
@@ -87,8 +91,8 @@ class SparseRetrieval:
         """
 
         # Pickle을 저장합니다.
-        pickle_name = f"sparse_embeddings.bin"
-        tfidf_vectorizer_name = f"tfidf_vectorizer.bin"
+        pickle_name = f"sparse_embeddings_{self.tfidf_num_features}.bin"
+        tfidf_vectorizer_name = f"tfidf_vectorizer_{self.tfidf_num_features}.bin"
         lsa_vectorizer_name = f"lsa_vectorizer_{n_lsa_features}.bin"
         context_lsa_name = f"sparse_lsa_embeddings_{n_lsa_features}.bin"
 
@@ -102,20 +106,6 @@ class SparseRetrieval:
                 self.p_embedding = pickle.load(file)
             with open(tfidfv_path, "rb") as file:
                 self.tfidf_vectorizer = pickle.load(file)
-
-            if self.apply_lsa is True:
-                if os.path.isfile(lsav_path):
-                    with open(lsav_path, "rb") as file:
-                        self.lsa_vectorizer = pickle.load(file)
-                    with open(lsa_emd_path, "rb") as file:
-                        self.lsa_embedding = pickle.load(file)
-                else:
-                    self.lsa_embedding = self.lsa_vectorizer.fit_transform(self.p_embedding)
-                    with open(lsav_path, "wb") as file:
-                        pickle.dump(self.lsa_vectorizer, file)
-                    with open(lsa_emd_path, "wb") as file:
-                        pickle.dump(self.lsa_embedding, file)
-
             print("Embedding pickle load.")
 
         else:
@@ -126,15 +116,20 @@ class SparseRetrieval:
                 pickle.dump(self.p_embedding, file)
             with open(tfidfv_path, "wb") as file:
                 pickle.dump(self.tfidf_vectorizer, file)
+            print("Embedding pickle saved.")
 
-            if self.apply_lsa is True:
+        if self.apply_lsa is True:
+            if os.path.isfile(lsav_path):
+                with open(lsav_path, "rb") as file:
+                    self.lsa_vectorizer = pickle.load(file)
+                with open(lsa_emd_path, "rb") as file:
+                    self.lsa_embedding = pickle.load(file)
+            else:
                 self.lsa_embedding = self.lsa_vectorizer.fit_transform(self.p_embedding)
                 with open(lsav_path, "wb") as file:
                     pickle.dump(self.lsa_vectorizer, file)
                 with open(lsa_emd_path, "wb") as file:
                     pickle.dump(self.lsa_embedding, file)
-
-            print("Embedding pickle saved.")
 
     def build_faiss(self, num_clusters=64) -> None:
 
@@ -159,15 +154,13 @@ class SparseRetrieval:
             self.indexer = faiss.read_index(indexer_path)
 
         else:
-            if self.lsa_vectorizer is None:
-                p_emb = self.p_embedding.astype(np.float32).toarray()
-            else:
+            if self.apply_lsa is True:
                 p_emb = self.lsa_embedding.astype(np.float32).toarray()
+            else:
+                p_emb = self.p_embedding.astype(np.float32).toarray()
             emb_dim = p_emb.shape[-1]
 
-            num_clusters = num_clusters
             quantizer = faiss.IndexFlatL2(emb_dim)
-
             self.indexer = faiss.IndexIVFScalarQuantizer(quantizer, quantizer.d, num_clusters, faiss.METRIC_L2)
             self.indexer.train(p_emb)  # 원래는 벡터 분포를 알기 위해. IndexFlatL2는 train이 필요 없음
             self.indexer.add(p_emb)
