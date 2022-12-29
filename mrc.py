@@ -212,12 +212,21 @@ class MRC:
         """
         Evaluation/Prediction에서 start logits과 end logits을 original context의 정답과 match하는 함수
         """
+        args = self.config.retriever
+        if args.type == "sparse":
+            prefix = f"tfidf{args.sparse.tfidf_num_features}"
+            if args.sparse.lsa:
+                prefix += f"_lsa{args.sparse.lsa_num_features}"
+            if args.sparse.faiss:
+                prefix += f"_faiss{args.faiss.num_clusters}"
+
         predictions = postprocess_qa_predictions(
             examples=examples,
             features=features,
             predictions=predictions,
             max_answer_length=self.config.utils.max_answer_length,
             output_dir=self.training_args.output_dir,
+            prefix=prefix,
         )
         # Metric을 구할 수 있도록 Format을 맞춰줍니다.
         formatted_predictions = [{"id": k, "prediction_text": v} for k, v in predictions.items()]
