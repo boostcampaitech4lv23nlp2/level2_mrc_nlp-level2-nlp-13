@@ -43,6 +43,14 @@ class DenseRetrievalTrainer:
 
             if torch.cuda.is_available():
                 batch = tuple(t.cuda() for t in batch)
+            # try:
+            #     print("@@@@@@@@@@ batch[0] shape", batch[0].shape)
+            #     print("@@@@@@@@@@ batch[3] shape", batch[3].shape)
+            #     print("@@@@@@@@@@ batch[6] shape", batch[6].shape)
+            # except:
+            #     print("@@@@@@@@@@ batch[0] shape 출력 불가능, batch[0] : ", batch[0])
+            #     print("@@@@@@@@@@ batch[3] shape 출력 불가능, batch[3] : ", batch[3])
+            #     print("@@@@@@@@@@ batch[3] shape 출력 불가능, batch[6] : ", batch[6])
 
             p_inputs = {
                 "input_ids": batch[0],
