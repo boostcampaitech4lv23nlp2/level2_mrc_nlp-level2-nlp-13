@@ -218,7 +218,7 @@ class MRC:
             if args.sparse.lsa:
                 prefix += f"_lsa{args.sparse.lsa_num_features}"
             if args.faiss.use_faiss:
-                prefix += f"_faiss{args.faiss.num_clusters}"
+                prefix += f"_faiss{args.faiss.num_clusters}_{args.faiss.metric}"
 
         predictions = postprocess_qa_predictions(
             examples=examples,

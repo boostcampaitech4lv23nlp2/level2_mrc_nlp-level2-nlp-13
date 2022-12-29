@@ -75,6 +75,7 @@ class SparseRetrieval:
 
         self.p_embedding = None  # get_sparse_embedding()로 생성합니다
         self.indexer = None  # build_faiss()로 생성합니다.
+        self.metric = config.retriever.faiss.metric
         self.num_clusters = config.retriever.faiss.num_clusters
         self.topk = config.retriever.topk
 
@@ -143,8 +144,8 @@ class SparseRetrieval:
             다만 이 index 파일은 용량이 1.4Gb+ 이기 때문에 여러 num_clusters로 시험해보고
             제일 적절한 것을 제외하고 모두 삭제하는 것을 권장합니다.
         """
-
-        indexer_name = f"faiss_clusters{self.num_clusters}.index"
+        # indexer_name = f"faiss_clusters{self.num_clusters}.index"
+        indexer_name = f"faiss_clusters{self.num_clusters}_{self.metric}.index"
         indexer_path = os.path.join(self.data_path, indexer_name)
         if os.path.isfile(indexer_path):
             print("Load Saved Faiss Indexer.")
@@ -157,8 +158,13 @@ class SparseRetrieval:
                 p_emb = self.p_embedding.astype(np.float32).toarray()
             emb_dim = p_emb.shape[-1]
 
-            quantizer = faiss.IndexFlatL2(emb_dim)
-            self.indexer = faiss.IndexIVFScalarQuantizer(quantizer, quantizer.d, self.num_clusters, faiss.METRIC_L2)
+            if self.metric == "l2":
+                quantizer = faiss.IndexFlatL2(emb_dim)
+                self.indexer = faiss.IndexIVFScalarQuantizer(quantizer, quantizer.d, self.num_clusters, faiss.METRIC_L2)
+            elif self.metric == "inner_product":
+                quantizer = faiss.IndexFlatIP(emb_dim)
+                faiss.normalize_L2(p_emb)  # normlaize for IndexFlatIP
+                self.indexer = faiss.IndexIVFScalarQuantizer(quantizer, quantizer.d, self.num_clusters, faiss.METRIC_INNER_PRODUCT)
             self.indexer.train(p_emb)  # 원래는 벡터 분포를 알기 위해. IndexFlatL2는 train이 필요 없음
             self.indexer.add(p_emb)
             faiss.write_index(self.indexer, indexer_path)
@@ -253,10 +259,9 @@ class SparseRetrieval:
         Note:
             vocab 에 없는 이상한 단어로 query 하는 경우 assertion 발생 (예) 뙣뙇?
         """
+        query_vec = self.tfidf_vectorizer.transform(queries)
         if self.apply_lsa:
-            query_vec = self.lsa_vectorizer.transform(queries)
-        else:
-            query_vec = self.tfidf_vectorizer.transform(queries)
+            query_vec = self.lsa_vectorizer.transform(query_vec)  # could cause errors
         assert np.sum(query_vec) != 0, "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
 
         result = query_vec * self.p_embedding.T
@@ -355,13 +360,15 @@ class SparseRetrieval:
         Note:
             vocab 에 없는 이상한 단어로 query 하는 경우 assertion 발생 (예) 뙣뙇?
         """
-        if self.apply_lsa is True:
-            query_vecs = self.lsa_vectorizer.transform(queries)
-        else:
-            query_vecs = self.tfidf_vectorizer.transform(queries)
+        query_vecs = self.tfidf_vectorizer.transform(queries)
+        if self.apply_lsa:
+            query_vecs = self.lsa_vectorizer.transform(query_vecs)
         assert np.sum(query_vecs) != 0, "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
 
-        q_embs = query_vecs.toarray().astype(np.float32)
+        if self.apply_lsa:
+            q_embs = query_vecs.astype(np.float32)
+        else:
+            q_embs = query_vecs.toarray().astype(np.float32)
         D, I = self.indexer.search(q_embs, self.topk)
 
         return D.tolist(), I.tolist()
