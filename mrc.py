@@ -33,7 +33,6 @@ class MRC:
             self.train_dataset = self.train_dataset.map(
                 self.prepare_train_features,
                 batched=True,  # default batch_size = 1000
-                num_proc=self.config.utils.num_workers,
                 remove_columns=self.train_dataset.column_names,
                 load_from_cache_file=not self.config.utils.overwrite_cache,
             )
@@ -83,7 +82,6 @@ class MRC:
         self.eval_dataset = self.eval_dataset.map(
             self.prepare_validation_features,
             batched=True,
-            num_proc=self.config.utils.num_workers,
             remove_columns=eval_dataset.column_names,
             load_from_cache_file=not self.config.utils.overwrite_cache,
         )
@@ -105,7 +103,6 @@ class MRC:
         self.predict_dataset = self.predict_dataset.map(
             self.prepare_validation_features,
             batched=True,
-            num_proc=self.config.utils.num_workers,
             remove_columns=predict_dataset.column_names,
             load_from_cache_file=not self.config.utils.overwrite_cache,
         )

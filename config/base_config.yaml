@@ -45,7 +45,6 @@ train:
 
 utils:
   seed: 42
-  num_workers: 1
   overwrite_cache: False
   max_answer_length: 30
 
