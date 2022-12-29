@@ -217,7 +217,7 @@ class MRC:
             prefix = f"tfidf{args.sparse.tfidf_num_features}"
             if args.sparse.lsa:
                 prefix += f"_lsa{args.sparse.lsa_num_features}"
-            if args.sparse.faiss:
+            if args.faiss.use_faiss:
                 prefix += f"_faiss{args.faiss.num_clusters}"
 
         predictions = postprocess_qa_predictions(
