@@ -116,7 +116,7 @@ def run_sparse_retrieval(
 
 def run_dense_retrieval(datasets, config):
     retriever = DenseRetrieval(config)
-    retriever.get_dense_embedding()
+    retriever.get_dense_passage_embedding()
     df = retriever.retrieve(datasets["validation"])
 
     f = Features(
