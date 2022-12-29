@@ -98,3 +98,4 @@ class QuestionAnsweringTrainer(Trainer):
             )
 
         predictions = self.post_process_function(predict_examples, predict_dataset, output.predictions)
+        return predictions
