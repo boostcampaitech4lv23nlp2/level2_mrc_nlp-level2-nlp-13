@@ -233,7 +233,8 @@ def postprocess_qa_predictions(
 
     # output_dir이 있으면 모든 dicts를 저장합니다.
     if output_dir is not None:
-        assert os.path.isdir(output_dir), f"{output_dir} is not a directory."
+        if not os.path.isdir(output_dir):
+            os.makedir(output_dir)
 
         prediction_file = os.path.join(
             output_dir,

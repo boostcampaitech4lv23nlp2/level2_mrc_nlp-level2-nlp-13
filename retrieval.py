@@ -14,6 +14,7 @@ import torch
 from datasets import Dataset, concatenate_datasets, load_from_disk
 from omegaconf import OmegaConf
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.decomposition import TruncatedSVD
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer
 
@@ -178,9 +179,10 @@ class SparseRetrieval:
     def __init__(
         self,
         tokenize_fn,
+        apply_lsa,
         data_path: Optional[str] = "../data/",
-        context_path: Optional[str] = "wikipedia_documents.json",
-    ) -> NoReturn:
+        context_path: Optional[str] = "../data/wikipedia_documents.json",
+    ) -> None:
 
         """
         Arguments:
@@ -190,7 +192,8 @@ class SparseRetrieval:
                 - lambda x: x.split(' ')
                 - Huggingface Tokenizer
                 - konlpy.tag의 Mecab
-
+            apply_lsa:
+                truncatedSVD를 이용해 추가로 tf-idf vectors에 LSA(latent semnatic analysis)를 적용할지 선택할 수 있습니다.
             data_path:
                 데이터가 보관되어 있는 경로입니다.
 
@@ -204,7 +207,7 @@ class SparseRetrieval:
         """
 
         self.data_path = data_path
-        with open(os.path.join(data_path, context_path), "r", encoding="utf-8") as f:
+        with open(context_path, "r", encoding="utf-8") as f:
             wiki = json.load(f)
 
         self.contexts = list(dict.fromkeys([v["text"] for v in wiki.values()]))  # set 은 매번 순서가 바뀌므로
@@ -212,16 +215,23 @@ class SparseRetrieval:
         self.ids = list(range(len(self.contexts)))
 
         # Transform by vectorizer
-        self.tfidfv = TfidfVectorizer(
+        self.tfidf_vectorizer = TfidfVectorizer(
             tokenizer=tokenize_fn,
             ngram_range=(1, 2),
             max_features=50000,
         )
+        self.apply_lsa = apply_lsa
+        self.lsa_vectorizer = None
+        if self.apply_lsa is True:
+            self.lsa_vectorizer = TruncatedSVD(
+                n_components=100,
+                algorithm="arpack",
+            )
 
         self.p_embedding = None  # get_sparse_embedding()로 생성합니다
         self.indexer = None  # build_faiss()로 생성합니다.
 
-    def get_sparse_embedding(self) -> NoReturn:
+    def get_sparse_embedding(self, n_lsa_features=0) -> None:
 
         """
         Summary:
@@ -231,28 +241,56 @@ class SparseRetrieval:
         """
 
         # Pickle을 저장합니다.
-        pickle_name = f"sparse_embedding.bin"
-        tfidfv_name = f"tfidv.bin"
+        pickle_name = f"sparse_embeddings.bin"
+        tfidf_vectorizer_name = f"tfidf_vectorizer.bin"
+        lsa_vectorizer_name = f"lsa_vectorizer_{n_lsa_features}.bin"
+        context_lsa_name = f"sparse_lsa_embeddings_{n_lsa_features}.bin"
+
         emd_path = os.path.join(self.data_path, pickle_name)
-        tfidfv_path = os.path.join(self.data_path, tfidfv_name)
+        tfidfv_path = os.path.join(self.data_path, tfidf_vectorizer_name)
+        lsav_path = os.path.join(self.data_path, lsa_vectorizer_name)
+        lsa_emd_path = os.path.join(self.data_path, context_lsa_name)
 
         if os.path.isfile(emd_path) and os.path.isfile(tfidfv_path):
             with open(emd_path, "rb") as file:
                 self.p_embedding = pickle.load(file)
             with open(tfidfv_path, "rb") as file:
-                self.tfidfv = pickle.load(file)
+                self.tfidf_vectorizer = pickle.load(file)
+
+            if self.apply_lsa is True:
+                if os.path.isfile(lsav_path):
+                    with open(lsav_path, "rb") as file:
+                        self.lsa_vectorizer = pickle.load(file)
+                    with open(lsa_emd_path, "rb") as file:
+                        self.lsa_embedding = pickle.load(file)
+                else:
+                    self.lsa_embedding = self.lsa_vectorizer.fit_transform(self.p_embedding)
+                    with open(lsav_path, "wb") as file:
+                        pickle.dump(self.lsa_vectorizer, file)
+                    with open(lsa_emd_path, "wb") as file:
+                        pickle.dump(self.lsa_embedding, file)
+
             print("Embedding pickle load.")
+
         else:
             print("Build passage embedding")
-            self.p_embedding = self.tfidfv.fit_transform(self.contexts)
-            print(self.p_embedding.shape)
+            self.p_embedding = self.tfidf_vectorizer.fit_transform(self.contexts)
+            print(f"tf-idf context embedding vector shape: {self.p_embedding.shape}")  # (56737, 50000)
             with open(emd_path, "wb") as file:
                 pickle.dump(self.p_embedding, file)
             with open(tfidfv_path, "wb") as file:
-                pickle.dump(self.tfidfv, file)
+                pickle.dump(self.tfidf_vectorizer, file)
+
+            if self.apply_lsa is True:
+                self.lsa_embedding = self.lsa_vectorizer.fit_transform(self.p_embedding)
+                with open(lsav_path, "wb") as file:
+                    pickle.dump(self.lsa_vectorizer, file)
+                with open(lsa_emd_path, "wb") as file:
+                    pickle.dump(self.lsa_embedding, file)
+
             print("Embedding pickle saved.")
 
-    def build_faiss(self, num_clusters=64) -> NoReturn:
+    def build_faiss(self, num_clusters=64) -> None:
 
         """
         Summary:
@@ -275,7 +313,10 @@ class SparseRetrieval:
             self.indexer = faiss.read_index(indexer_path)
 
         else:
-            p_emb = self.p_embedding.astype(np.float32).toarray()
+            if self.lsa_vectorizer is None:
+                p_emb = self.p_embedding.astype(np.float32).toarray()
+            else:
+                p_emb = self.lsa_embedding.astype(np.float32).toarray()
             emb_dim = p_emb.shape[-1]
 
             num_clusters = num_clusters
@@ -357,7 +398,7 @@ class SparseRetrieval:
         """
 
         with timer("transform"):
-            query_vec = self.tfidfv.transform([query])
+            query_vec = self.tfidf_vectorizer.transform([query])
         assert np.sum(query_vec) != 0, "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
 
         with timer("query ex search"):
@@ -382,7 +423,7 @@ class SparseRetrieval:
             vocab 에 없는 이상한 단어로 query 하는 경우 assertion 발생 (예) 뙣뙇?
         """
 
-        query_vec = self.tfidfv.transform(queries)
+        query_vec = self.tfidf_vectorizer.transform(queries)
         assert np.sum(query_vec) != 0, "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
 
         result = query_vec * self.p_embedding.T
@@ -467,7 +508,7 @@ class SparseRetrieval:
             vocab 에 없는 이상한 단어로 query 하는 경우 assertion 발생 (예) 뙣뙇?
         """
 
-        query_vec = self.tfidfv.transform([query])
+        query_vec = self.tfidf_vectorizer.transform([query])
         assert np.sum(query_vec) != 0, "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
 
         q_emb = query_vec.toarray().astype(np.float32)
@@ -488,7 +529,7 @@ class SparseRetrieval:
             vocab 에 없는 이상한 단어로 query 하는 경우 assertion 발생 (예) 뙣뙇?
         """
 
-        query_vecs = self.tfidfv.transform(queries)
+        query_vecs = self.tfidf_vectorizer.transform(queries)
         assert np.sum(query_vecs) != 0, "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
 
         q_embs = query_vecs.toarray().astype(np.float32)

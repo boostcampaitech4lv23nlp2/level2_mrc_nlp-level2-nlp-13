@@ -24,7 +24,7 @@ def main(args):
     config = OmegaConf.load(f"./config/{args.config}.yaml")
     # wandb 설정
     now_time = datetime.datetime.now(pytz.timezone("Asia/Seoul")).strftime("%m-%d-%H-%M")
-    run_id = f"{config.wandb.name}_{now_time}"
+    run_id = f"mrc_{config.wandb.name}_{now_time}"
     wandb.init(
         entity=config.wandb.team,
         project=config.wandb.project,
@@ -70,10 +70,9 @@ def main(args):
         tokenizer,
         model,
         datasets["train"],
-        datasets["validation"],
     )
-    reader.train()
-    reader.evaluate()
+    reader.train(checkpoint=config.path.resume)
+    reader.evaluate(datasets["validation"])
 
 
 if __name__ == "__main__":
