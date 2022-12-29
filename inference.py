@@ -73,6 +73,7 @@ def main(args):
         config.model.name,
         from_tf=bool(".ckpt" in config.model.name),
     )
+    print(f"Get the pretrained model {config.model.name}")
 
     reader = MRC(
         config,
@@ -86,7 +87,6 @@ def main(args):
         datasets = run_sparse_retrieval(
             tokenize_fn=tokenizer.tokenize,
             datasets=datasets,
-            apply_lsa=config.retriever.sparse.lsa,
             config=config,
         )
 
@@ -97,23 +97,20 @@ def main(args):
 def run_sparse_retrieval(
     tokenize_fn: Callable[[str], List[str]],
     datasets: DatasetDict,
-    apply_lsa: bool,
     config: dictconfig.DictConfig,
-    data_path: str = "../data",
 ) -> DatasetDict:
 
     # Query에 맞는 Passage들을 Retrieval 합니다.
     retriever = SparseRetrieval(
         tokenize_fn=tokenize_fn,
-        apply_lsa=apply_lsa,
-        data_path=data_path,
-        context_path=config.path.context,
+        config=config,
     )
-    retriever.get_sparse_embedding(
-        n_lsa_features=config.retriever.sparse.lsa_num_features if config.retriever.sparse.lsa_num_features is not None else 0
-    )
-    retriever.build_faiss(num_clusters=config.retriever.faiss.num_clusters)
-    df = retriever.retrieve_faiss(datasets["validation"], topk=config.retriever.topk)
+    retriever.get_sparse_embedding()
+    retriever.build_faiss()
+    if config.retriever.faiss.use_faiss:
+        df = retriever.retrieve_faiss(datasets["validation"])
+    else:
+        df = retriever.retrieve(datasets["validation"])
 
     # test data 에 대해선 정답이 없으므로 id question context 로만 데이터셋이 구성됩니다.
     f = Features(

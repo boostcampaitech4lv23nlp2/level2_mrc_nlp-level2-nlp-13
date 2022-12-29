@@ -24,7 +24,7 @@ class MRC:
     def __post_init__(self):
         check_sanity(self.config, self.tokenizer)
 
-        if self.train_dataset:
+        if self.train_dataset is not None:
             self.train_dataset = self.train_dataset.map(
                 self.prepare_train_features,
                 batched=True,  # default batch_size = 1000
@@ -73,16 +73,16 @@ class MRC:
 
     def evaluate(self, eval_dataset, ignore_keys=None):
         logger.info("*** Evaluate ***")
+        self.mode = "eval"
         self.eval_dataset = eval_dataset
         self.eval_dataset = self.eval_dataset.map(
             self.prepare_validation_features,
             batched=True,
             num_proc=self.config.utils.num_workers,
-            remove_columns=self.eval_dataset.column_names,
+            remove_columns=eval_dataset.column_names,
             load_from_cache_file=not self.config.utils.overwrite_cache,
         )
         assert len(self.eval_dataset) != len(eval_dataset)
-
         metrics = self.trainer.evaluate(
             eval_dataset=self.eval_dataset,  # preprocessed
             eval_examples=eval_dataset,  # unprocessed
@@ -95,12 +95,13 @@ class MRC:
 
     def predict(self, predict_dataset, ignore_keys=None):
         logger.info("*** Predict ***")
+        self.mode = "predict"
         self.predict_dataset = predict_dataset
         self.predict_dataset = self.predict_dataset.map(
             self.prepare_validation_features,
             batched=True,
             num_proc=self.config.utils.num_workers,
-            remove_columns=self.predict_dataset.column_names,
+            remove_columns=predict_dataset.column_names,
             load_from_cache_file=not self.config.utils.overwrite_cache,
         )
         self.trainer.predict(
@@ -173,9 +174,9 @@ class MRC:
 
     def prepare_validation_features(self, examples):
         pad_on_right = self.tokenizer.padding_side == "right"
-        try:
+        if self.mode == "eval":
             column_names = self.eval_dataset.column_names
-        except:
+        elif self.mode == "predict":
             column_names = self.predict_dataset.column_names
         question_column_name = "question" if "question" in column_names else column_names[0]
         context_column_name = "context" if "context" in column_names else column_names[1]
@@ -219,13 +220,13 @@ class MRC:
         # Metric을 구할 수 있도록 Format을 맞춰줍니다.
         formatted_predictions = [{"id": k, "prediction_text": v} for k, v in predictions.items()]
 
-        if self.eval_dataset:
+        if self.mode == "eval":
             column_names = examples.column_names
             answer_column_name = "answers" if "answers" in column_names else column_names[2]
             references = [{"id": example["id"], "answers": example[answer_column_name]} for example in examples]
             return EvalPrediction(predictions=formatted_predictions, label_ids=references)
 
-        elif self.predict_dataset:
+        elif self.mode == "predict":
             return formatted_predictions
 
     def compute_metrics(self, p: EvalPrediction):

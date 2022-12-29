@@ -179,9 +179,7 @@ class SparseRetrieval:
     def __init__(
         self,
         tokenize_fn,
-        apply_lsa,
-        data_path: Optional[str] = "../data/",
-        context_path: Optional[str] = "../data/wikipedia_documents.json",
+        config,
     ) -> None:
 
         """
@@ -192,21 +190,20 @@ class SparseRetrieval:
                 - lambda x: x.split(' ')
                 - Huggingface Tokenizer
                 - konlpy.tag의 Mecab
-            apply_lsa:
-                truncatedSVD를 이용해 추가로 tf-idf vectors에 LSA(latent semnatic analysis)를 적용할지 선택할 수 있습니다.
-            data_path:
-                데이터가 보관되어 있는 경로입니다.
-
-            context_path:
-                Passage들이 묶여있는 파일명입니다.
-
-            data_path/context_path가 존재해야합니다.
+            config:
+                주요 args
+                tfidf_num_features:
+                    tfidf 벡터 차원 크기
+                apply_lsa:
+                    truncatedSVD를 이용해 추가로 tf-idf vectors에 LSA(latent semnatic analysis)를 적용할지 선택할 수 있습니다.
 
         Summary:
             Passage 파일을 불러오고 TfidfVectorizer를 선언하는 기능을 합니다.
         """
 
-        self.data_path = data_path
+        self.data_path = config.path.data
+        context_path = config.path.context
+        args = config.retriever.sparse
         with open(context_path, "r", encoding="utf-8") as f:
             wiki = json.load(f)
 
@@ -215,23 +212,27 @@ class SparseRetrieval:
         self.ids = list(range(len(self.contexts)))
 
         # Transform by vectorizer
+        self.tfidf_num_features = args.tfidf_num_features
         self.tfidf_vectorizer = TfidfVectorizer(
             tokenizer=tokenize_fn,
             ngram_range=(1, 2),
-            max_features=50000,
+            max_features=self.tfidf_num_features,
         )
-        self.apply_lsa = apply_lsa
+        self.apply_lsa = args.lsa
         self.lsa_vectorizer = None
+        self.n_lsa_features = args.lsa_num_features
         if self.apply_lsa is True:
             self.lsa_vectorizer = TruncatedSVD(
-                n_components=100,
+                n_components=args.lsa_num_features,
                 algorithm="arpack",
             )
 
         self.p_embedding = None  # get_sparse_embedding()로 생성합니다
         self.indexer = None  # build_faiss()로 생성합니다.
+        self.num_clusters = config.retriever.faiss.num_clusters
+        self.topk = config.retriever.topk
 
-    def get_sparse_embedding(self, n_lsa_features=0) -> None:
+    def get_sparse_embedding(self) -> None:
 
         """
         Summary:
@@ -241,10 +242,10 @@ class SparseRetrieval:
         """
 
         # Pickle을 저장합니다.
-        pickle_name = f"sparse_embeddings.bin"
-        tfidf_vectorizer_name = f"tfidf_vectorizer.bin"
-        lsa_vectorizer_name = f"lsa_vectorizer_{n_lsa_features}.bin"
-        context_lsa_name = f"sparse_lsa_embeddings_{n_lsa_features}.bin"
+        pickle_name = f"sparse_embeddings_{self.tfidf_num_features}.bin"
+        tfidf_vectorizer_name = f"tfidf_vectorizer_{self.tfidf_num_features}.bin"
+        lsa_vectorizer_name = f"lsa_vectorizer_{self.n_lsa_features}.bin"
+        context_lsa_name = f"sparse_lsa_embeddings_{self.n_lsa_features}.bin"
 
         emd_path = os.path.join(self.data_path, pickle_name)
         tfidfv_path = os.path.join(self.data_path, tfidf_vectorizer_name)
@@ -256,20 +257,6 @@ class SparseRetrieval:
                 self.p_embedding = pickle.load(file)
             with open(tfidfv_path, "rb") as file:
                 self.tfidf_vectorizer = pickle.load(file)
-
-            if self.apply_lsa is True:
-                if os.path.isfile(lsav_path):
-                    with open(lsav_path, "rb") as file:
-                        self.lsa_vectorizer = pickle.load(file)
-                    with open(lsa_emd_path, "rb") as file:
-                        self.lsa_embedding = pickle.load(file)
-                else:
-                    self.lsa_embedding = self.lsa_vectorizer.fit_transform(self.p_embedding)
-                    with open(lsav_path, "wb") as file:
-                        pickle.dump(self.lsa_vectorizer, file)
-                    with open(lsa_emd_path, "wb") as file:
-                        pickle.dump(self.lsa_embedding, file)
-
             print("Embedding pickle load.")
 
         else:
@@ -280,17 +267,22 @@ class SparseRetrieval:
                 pickle.dump(self.p_embedding, file)
             with open(tfidfv_path, "wb") as file:
                 pickle.dump(self.tfidf_vectorizer, file)
+            print("Embedding pickle saved.")
 
-            if self.apply_lsa is True:
+        if self.apply_lsa is True:
+            if os.path.isfile(lsav_path):
+                with open(lsav_path, "rb") as file:
+                    self.lsa_vectorizer = pickle.load(file)
+                with open(lsa_emd_path, "rb") as file:
+                    self.lsa_embedding = pickle.load(file)
+            else:
                 self.lsa_embedding = self.lsa_vectorizer.fit_transform(self.p_embedding)
                 with open(lsav_path, "wb") as file:
                     pickle.dump(self.lsa_vectorizer, file)
                 with open(lsa_emd_path, "wb") as file:
                     pickle.dump(self.lsa_embedding, file)
 
-            print("Embedding pickle saved.")
-
-    def build_faiss(self, num_clusters=64) -> None:
+    def build_faiss(self) -> None:
 
         """
         Summary:
@@ -306,29 +298,27 @@ class SparseRetrieval:
             제일 적절한 것을 제외하고 모두 삭제하는 것을 권장합니다.
         """
 
-        indexer_name = f"faiss_clusters{num_clusters}.index"
+        indexer_name = f"faiss_clusters{self.num_clusters}.index"
         indexer_path = os.path.join(self.data_path, indexer_name)
         if os.path.isfile(indexer_path):
             print("Load Saved Faiss Indexer.")
             self.indexer = faiss.read_index(indexer_path)
 
         else:
-            if self.lsa_vectorizer is None:
-                p_emb = self.p_embedding.astype(np.float32).toarray()
-            else:
+            if self.apply_lsa is True:
                 p_emb = self.lsa_embedding.astype(np.float32).toarray()
+            else:
+                p_emb = self.p_embedding.astype(np.float32).toarray()
             emb_dim = p_emb.shape[-1]
 
-            num_clusters = num_clusters
             quantizer = faiss.IndexFlatL2(emb_dim)
-
-            self.indexer = faiss.IndexIVFScalarQuantizer(quantizer, quantizer.d, num_clusters, faiss.METRIC_L2)
+            self.indexer = faiss.IndexIVFScalarQuantizer(quantizer, quantizer.d, self.num_clusters, faiss.METRIC_L2)
             self.indexer.train(p_emb)  # 원래는 벡터 분포를 알기 위해. IndexFlatL2는 train이 필요 없음
             self.indexer.add(p_emb)
             faiss.write_index(self.indexer, indexer_path)
             print("Faiss Indexer Saved.")
 
-    def retrieve(self, query_or_dataset: Union[str, Dataset], topk: Optional[int] = 1) -> Union[Tuple[List, List], pd.DataFrame]:
+    def retrieve(self, query_or_dataset: Union[str, Dataset]) -> Union[Tuple[List, List], pd.DataFrame]:
 
         """
         Arguments:
@@ -337,8 +327,6 @@ class SparseRetrieval:
                 str 형태인 하나의 query만 받으면 `get_relevant_doc`을 통해 유사도를 구합니다.
                 Dataset 형태는 query를 포함한 HF.Dataset을 받습니다.
                 이 경우 `get_relevant_doc_bulk`를 통해 유사도를 구합니다.
-            topk (Optional[int], optional): Defaults to 1.
-                상위 몇 개의 passage를 사용할 것인지 지정합니다.
 
         Returns:
             1개의 Query를 받는 경우  -> Tuple(List, List)
@@ -353,21 +341,21 @@ class SparseRetrieval:
         assert self.p_embedding is not None, "get_sparse_embedding() 메소드를 먼저 수행해줘야합니다."
 
         if isinstance(query_or_dataset, str):
-            doc_scores, doc_indices = self.get_relevant_doc(query_or_dataset, k=topk)
+            doc_scores, doc_indices = self.get_relevant_doc(query_or_dataset)
             print("[Search query]\n", query_or_dataset, "\n")
 
-            for i in range(topk):
+            for i in range(self.topk):
                 print(f"Top-{i+1} passage with score {doc_scores[i]:4f}")
                 print(self.contexts[doc_indices[i]])
 
-            return (doc_scores, [self.contexts[doc_indices[i]] for i in range(topk)])
+            return (doc_scores, [self.contexts[doc_indices[i]] for i in range(self.topk)])
 
         elif isinstance(query_or_dataset, Dataset):
 
             # Retrieve한 Passage를 pd.DataFrame으로 반환합니다.
             total = []
             with timer("query exhaustive search"):
-                doc_scores, doc_indices = self.get_relevant_doc_bulk(query_or_dataset["question"], k=topk)
+                doc_scores, doc_indices = self.get_relevant_doc_bulk(query_or_dataset["question"])
             for idx, example in enumerate(tqdm(query_or_dataset, desc="Sparse retrieval: ")):
                 tmp = {
                     # Query와 해당 id를 반환합니다.
@@ -385,14 +373,12 @@ class SparseRetrieval:
             cqas = pd.DataFrame(total)
             return cqas
 
-    def get_relevant_doc(self, query: str, k: Optional[int] = 1) -> Tuple[List, List]:
+    def get_relevant_doc(self, query: str) -> Tuple[List, List]:
 
         """
         Arguments:
             query (str):
                 하나의 Query를 받습니다.
-            k (Optional[int]): 1
-                상위 몇 개의 Passage를 반환할지 정합니다.
         Note:
             vocab 에 없는 이상한 단어로 query 하는 경우 assertion 발생 (예) 뙣뙇?
         """
@@ -407,23 +393,24 @@ class SparseRetrieval:
             result = result.toarray()
 
         sorted_result = np.argsort(result.squeeze())[::-1]
-        doc_score = result.squeeze()[sorted_result].tolist()[:k]
-        doc_indices = sorted_result.tolist()[:k]
+        doc_score = result.squeeze()[sorted_result].tolist()[: self.topk]
+        doc_indices = sorted_result.tolist()[: self.topk]
         return doc_score, doc_indices
 
-    def get_relevant_doc_bulk(self, queries: List, k: Optional[int] = 1) -> Tuple[List, List]:
+    def get_relevant_doc_bulk(self, queries: List) -> Tuple[List, List]:
 
         """
         Arguments:
             queries (List):
                 하나의 Query를 받습니다.
-            k (Optional[int]): 1
-                상위 몇 개의 Passage를 반환할지 정합니다.
+
         Note:
             vocab 에 없는 이상한 단어로 query 하는 경우 assertion 발생 (예) 뙣뙇?
         """
-
-        query_vec = self.tfidf_vectorizer.transform(queries)
+        if self.apply_lsa:
+            query_vec = self.lsa_vectorizer.transform(queries)
+        else:
+            query_vec = self.tfidf_vectorizer.transform(queries)
         assert np.sum(query_vec) != 0, "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
 
         result = query_vec * self.p_embedding.T
@@ -433,11 +420,11 @@ class SparseRetrieval:
         doc_indices = []
         for i in range(result.shape[0]):
             sorted_result = np.argsort(result[i, :])[::-1]
-            doc_scores.append(result[i, :][sorted_result].tolist()[:k])
-            doc_indices.append(sorted_result.tolist()[:k])
+            doc_scores.append(result[i, :][sorted_result].tolist()[: self.topk])
+            doc_indices.append(sorted_result.tolist()[: self.topk])
         return doc_scores, doc_indices
 
-    def retrieve_faiss(self, query_or_dataset: Union[str, Dataset], topk: Optional[int] = 1) -> Union[Tuple[List, List], pd.DataFrame]:
+    def retrieve_faiss(self, query_or_dataset: Union[str, Dataset]) -> Union[Tuple[List, List], pd.DataFrame]:
 
         """
         Arguments:
@@ -446,8 +433,6 @@ class SparseRetrieval:
                 str 형태인 하나의 query만 받으면 `get_relevant_doc`을 통해 유사도를 구합니다.
                 Dataset 형태는 query를 포함한 HF.Dataset을 받습니다.
                 이 경우 `get_relevant_doc_bulk`를 통해 유사도를 구합니다.
-            topk (Optional[int], optional): Defaults to 1.
-                상위 몇 개의 passage를 사용할 것인지 지정합니다.
 
         Returns:
             1개의 Query를 받는 경우  -> Tuple(List, List)
@@ -463,14 +448,14 @@ class SparseRetrieval:
         assert self.indexer is not None, "build_faiss()를 먼저 수행해주세요."
 
         if isinstance(query_or_dataset, str):
-            doc_scores, doc_indices = self.get_relevant_doc_faiss(query_or_dataset, k=topk)
+            doc_scores, doc_indices = self.get_relevant_doc_faiss(query_or_dataset)
             print("[Search query]\n", query_or_dataset, "\n")
 
-            for i in range(topk):
+            for i in range(self.topk):
                 print("Top-%d passage with score %.4f" % (i + 1, doc_scores[i]))
                 print(self.contexts[doc_indices[i]])
 
-            return (doc_scores, [self.contexts[doc_indices[i]] for i in range(topk)])
+            return (doc_scores, [self.contexts[doc_indices[i]] for i in range(self.topk)])
 
         elif isinstance(query_or_dataset, Dataset):
 
@@ -479,7 +464,7 @@ class SparseRetrieval:
             total = []
 
             with timer("query faiss search"):
-                doc_scores, doc_indices = self.get_relevant_doc_bulk_faiss(queries, k=topk)
+                doc_scores, doc_indices = self.get_relevant_doc_bulk_faiss(queries)
             for idx, example in enumerate(tqdm(query_or_dataset, desc="Sparse retrieval: ")):
                 tmp = {
                     # Query와 해당 id를 반환합니다.
@@ -496,14 +481,12 @@ class SparseRetrieval:
 
             return pd.DataFrame(total)
 
-    def get_relevant_doc_faiss(self, query: str, k: Optional[int] = 1) -> Tuple[List, List]:
+    def get_relevant_doc_faiss(self, query: str) -> Tuple[List, List]:
 
         """
         Arguments:
             query (str):
                 하나의 Query를 받습니다.
-            k (Optional[int]): 1
-                상위 몇 개의 Passage를 반환할지 정합니다.
         Note:
             vocab 에 없는 이상한 단어로 query 하는 경우 assertion 발생 (예) 뙣뙇?
         """
@@ -513,27 +496,27 @@ class SparseRetrieval:
 
         q_emb = query_vec.toarray().astype(np.float32)
         with timer("query faiss search"):
-            D, I = self.indexer.search(q_emb, k)
+            D, I = self.indexer.search(q_emb, self.topk)
 
         return D.tolist()[0], I.tolist()[0]
 
-    def get_relevant_doc_bulk_faiss(self, queries: List, k: Optional[int] = 1) -> Tuple[List, List]:
+    def get_relevant_doc_bulk_faiss(self, queries: List) -> Tuple[List, List]:
 
         """
         Arguments:
             queries (List):
                 하나의 Query를 받습니다.
-            k (Optional[int]): 1
-                상위 몇 개의 Passage를 반환할지 정합니다.
         Note:
             vocab 에 없는 이상한 단어로 query 하는 경우 assertion 발생 (예) 뙣뙇?
         """
-
-        query_vecs = self.tfidf_vectorizer.transform(queries)
+        if self.apply_lsa is True:
+            query_vecs = self.lsa_vectorizer.transform(queries)
+        else:
+            query_vecs = self.tfidf_vectorizer.transform(queries)
         assert np.sum(query_vecs) != 0, "오류가 발생했습니다. 이 오류는 보통 query에 vectorizer의 vocab에 없는 단어만 존재하는 경우 발생합니다."
 
         q_embs = query_vecs.toarray().astype(np.float32)
-        D, I = self.indexer.search(q_embs, k)
+        D, I = self.indexer.search(q_embs, self.topk)
 
         return D.tolist(), I.tolist()
 

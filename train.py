@@ -74,6 +74,14 @@ def main(args):
     reader.train(checkpoint=config.path.resume)
     reader.evaluate(datasets["validation"])
 
+    # share the pretrained model to huggingface hub
+    if config.hf_hub.push_to_hub is True:
+        save_name = config.hf_hub.save_name
+        if not save_name.startswith("nlpotato/"):
+            save_name = "nlpotato/" + save_name
+        model.push_to_hub(config.hf_hub.save_name)
+        tokenizer.push_to_hub(config.hf_hub.save_name)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
