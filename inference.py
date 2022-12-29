@@ -100,19 +100,18 @@ def run_sparse_retrieval(
     config: dictconfig.DictConfig,
 ) -> DatasetDict:
 
-    data_path = config.path.data
     # Query에 맞는 Passage들을 Retrieval 합니다.
     retriever = SparseRetrieval(
         tokenize_fn=tokenize_fn,
-        args=config.retriever.sparse,
-        data_path=data_path,
-        context_path=config.path.context,
+        config=config,
     )
-    retriever.get_sparse_embedding(
-        n_lsa_features=config.retriever.sparse.lsa_num_features if config.retriever.sparse.lsa_num_features is not None else 0
-    )
-    retriever.build_faiss(num_clusters=config.retriever.faiss.num_clusters)
-    df = retriever.retrieve_faiss(datasets["validation"], topk=config.retriever.topk)
+    retriever.get_sparse_embedding()
+    retriever.build_faiss()
+    if config.retriever.faiss.use_faiss:
+        df = retriever.retrieve_faiss(datasets["validation"])
+    else:
+        df = retriever.retrieve(datasets["validation"])
+
     # test data 에 대해선 정답이 없으므로 id question context 로만 데이터셋이 구성됩니다.
     f = Features(
         {
