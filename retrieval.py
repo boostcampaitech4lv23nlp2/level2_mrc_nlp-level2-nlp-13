@@ -13,8 +13,8 @@ import pandas as pd
 import torch
 from datasets import Dataset, concatenate_datasets, load_from_disk
 from omegaconf import OmegaConf
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
+from sklearn.feature_extraction.text import TfidfVectorizer
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer
 
@@ -120,7 +120,6 @@ class DenseRetrieval:
                     "question": example["question"],
                     "id": example["id"],
                     # Retrieve한 Passage의 id, context를 반환합니다.
-                    "context_id": doc_ids[idx],
                     "context": " ".join([self.contexts[pid] for pid in doc_ids[idx]]),
                 }
                 if "context" in example.keys() and "answers" in example.keys():
