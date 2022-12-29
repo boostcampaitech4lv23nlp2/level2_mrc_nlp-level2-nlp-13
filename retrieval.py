@@ -3,12 +3,11 @@ import os
 import pickle
 import time
 from contextlib import contextmanager
-from typing import List, NoReturn, Optional, Tuple, Union
+from typing import List, Tuple, Union
 
 import faiss
 import numpy as np
 import pandas as pd
-from torch.multiprocessing import set_start_method
 from datasets import Dataset, concatenate_datasets, load_from_disk
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
