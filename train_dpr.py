@@ -33,18 +33,22 @@ def main(config):
     config.DPR.train.update(config.DPR.optimizer)
     if config.DPR.train.output_dir is None:
         config.DPR.train.output_dir = os.path.join("saved_models/DPR", config.DPR.model.name, run_id)
-    # training_args.report_to = ["wandb"]
 
     # logging 설정
     if not os.path.exists("./logs"):
         os.makedirs("./logs")
         with open("./logs/DPR_logs.log", "w+") as f:
-            f.write("***** Logging *****\n")
+            f.write("***** Log file Start *****\n")
+    LOG_FORMAT = "%(asctime)s - %(message)s"
     logging.basicConfig(
-        format="%(asctime)s - %(message)s",
+        level=logging.INFO,
+        format=LOG_FORMAT,
         datefmt="%m/%d/%Y %H:%M:%S",
         handlers=[logging.StreamHandler(sys.stdout)],
     )
+    file_handler = logging.FileHandler("./logs/DPR_logs.log", mode="a", encoding="utf-8")
+    file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    logger.addHandler(file_handler)
 
     # verbosity 설정 : Transformers logger의 정보로 사용합니다 (on main process only)
     logger.info("config", config)
@@ -67,10 +71,10 @@ def main(config):
         max_context_length=config.DPR.tokenizer.max_context_length,
         tokenizer=tokenizer,
     )
-    logger.info("  train_dataset", len(train_dataset), "valid_dataset", len(valid_dataset))
+    logger.info(f"  train_dataset: {len(train_dataset)} | valid_dataset: {len(valid_dataset)}")
 
     # 모델
-    logger.info("  Encoder model", config.DPR.model.name)
+    logger.info(f"  Encoder model: {config.DPR.model.name}")
     p_encoder = BertEncoder.from_pretrained(config.DPR.model.name)
     q_encoder = BertEncoder.from_pretrained(config.DPR.model.name)
     if torch.cuda.is_available():

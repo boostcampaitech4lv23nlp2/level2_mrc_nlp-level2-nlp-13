@@ -1,12 +1,26 @@
 path:
-  train: ../data/train_dataset
-  predict: ../data/test_dataset
+  train: ./data/train_dataset
+  predict: ./data/test_dataset
+  data: ./data/
+  context: ./data/wikipedia_documents.json
+  resume: 
+
+retriever:
+  type: sparse # sparse or dense
+  topk: 10
+  sparse:
+    tfidf_num_features: 50000 # default: 50000. max_num_features for tfidf vectorizer
+    lsa: True # apply LSA or not
+    lsa_num_features: 1024 # default: 100.
+  faiss:
+    use_faiss: False # default: False
+    num_clusters: 64 # default: 64. The number of clusters
 
 model:
-  name: klue/roberta-base
+  name: klue/roberta-base 
 
 tokenizer:
-  max_length: 256
+  max_length: 384
   padding: max_length
   stride: 128
   return_token_type_ids: False # False for Roberta models
@@ -31,12 +45,16 @@ train:
 
 utils:
   seed: 42
-  num_workers: 4
+  num_workers: 1
   overwrite_cache: False
   max_answer_length: 30
 
 wandb:
   team: next-level-potato # team account name
   project: MRC # project name
-  name: # 실험자 명
+  name: kbh_MRC_train_test # 실험자 명
   tags: [] # tag
+
+hf_hub:
+  push_to_hub: False # whether to push to huggingface hub the pretrained model & tokenizer
+  save_name: # name to register. e.g. nlpotato/roberta-base-new-model
