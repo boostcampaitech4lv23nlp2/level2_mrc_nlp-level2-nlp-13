@@ -1,8 +1,8 @@
 path:
-  train: ../data/train_dataset
-  predict: ../data/test_dataset
-  data: ../data/
-  context: ../data/wikipedia_documents.json
+  train: ./data/train_dataset
+  predict: ./data/test_dataset
+  data: ./data/
+  context: ./data/wikipedia_documents.json
   resume: 
 
 retriever:
@@ -52,7 +52,7 @@ utils:
 wandb:
   team: next-level-potato # team account name
   project: MRC # project name
-  name: # 실험자 명
+  name: kbh_MRC_train_test # 실험자 명
   tags: [] # tag
 
 hf_hub:
