@@ -233,20 +233,21 @@ def postprocess_qa_predictions(
 
     # output_dir이 있으면 모든 dicts를 저장합니다.
     if output_dir is not None:
-        assert os.path.isdir(output_dir), f"{output_dir} is not a directory."
+        if not os.path.isdir(output_dir):
+            os.makedir(output_dir)
 
         prediction_file = os.path.join(
             output_dir,
-            "predictions.json" if prefix is None else f"predictions_{prefix}".json,
+            "predictions.json" if prefix is None else f"predictions_{prefix}.json",
         )
         nbest_file = os.path.join(
             output_dir,
-            "nbest_predictions.json" if prefix is None else f"nbest_predictions_{prefix}".json,
+            "nbest_predictions.json" if prefix is None else f"nbest_predictions_{prefix}.json",
         )
         if version_2_with_negative:
             null_odds_file = os.path.join(
                 output_dir,
-                "null_odds.json" if prefix is None else f"null_odds_{prefix}".json,
+                "null_odds.json" if prefix is None else f"null_odds_{prefix}.json",
             )
 
         logger.info(f"Saving predictions to {prediction_file}.")
