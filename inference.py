@@ -6,7 +6,6 @@ Open-Domain Question Answering 을 수행하는 inference 코드 입니다.
 import os
 import logging
 import sys
-import argparse
 import pytz
 import datetime
 from typing import Callable, Dict, List, NoReturn, Tuple
