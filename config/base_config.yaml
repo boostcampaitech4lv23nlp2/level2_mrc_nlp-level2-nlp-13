@@ -10,12 +10,12 @@ retriever:
   topk: 10
   sparse:
     tfidf_num_features: 50000 # default: 50000. max_num_features for tfidf vectorizer
-    lsa: True # apply LSA or not
+    lsa: False # apply LSA or not
     lsa_num_features: 1024 # default: 100.
   faiss:
     use_faiss: False # default: False
     num_clusters: 64 # default: 64. The number of clusters
-    metric: l2 # default l2.
+    metric: inner_product # default: inner_product . l2 or inner_product available.
 
 model:
   name: klue/roberta-base 
@@ -39,7 +39,7 @@ train:
   output_dir: # default: saved_models/model/{wandb_name}_{time}
   num_train_epochs: 5
   fp16: False
-  save_strategy : steps
+  save_strategy : epoch # steps or epoch
   save_steps: 500
   save_total_limit: 1 # default 1: save the last and the best
   load_best_model_at_end: False 
