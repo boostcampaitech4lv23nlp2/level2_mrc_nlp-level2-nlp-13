@@ -520,6 +520,22 @@ class SparseRetrieval:
         return D.tolist(), I.tolist()
 
 
+class HybridRetrieval:
+    """
+    Sparse Retrieval Score에 Dense Retrieval Score를 더해주어 Reranking 수행
+    """
+
+    def __init__(self, tokenize_fn, config):
+        self.dense_retriever = DenseRetrieval(config)
+        self.sparse_retriever = SparseRetrieval(tokenize_fn=tokenize_fn, config=config)
+
+        self.queries = None
+
+    def get_sparse_score(self):
+        self.sparse_retriever.get_sparse_embedding()
+        sparse_scores, sparse_indices = self.sparse_retriever.get_relevant_doc_bulk(queries=self.queries)
+
+
 if __name__ == "__main__":
 
     import argparse
