@@ -5,7 +5,7 @@ import pickle
 import sys
 import time
 from contextlib import contextmanager
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import faiss
 import numpy as np
@@ -18,7 +18,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer
 
-from dataset.DPR_Dataset import DenseRetrievalDataset, DenseRetrievalValidDataset
+from dataset.DPR_Dataset import (DenseRetrievalDataset,
+                                 DenseRetrievalValidDataset)
 from model.Retrieval.BertEncoder import BertEncoder
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
