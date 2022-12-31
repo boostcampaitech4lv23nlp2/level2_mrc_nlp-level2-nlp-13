@@ -7,8 +7,8 @@ import omegaconf
 from datasets import Dataset, load_metric
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer, DataCollatorWithPadding, EvalPrediction, TrainingArguments
 
-from trainer_qa import QuestionAnsweringTrainer
-from utils_qa import check_sanity, postprocess_qa_predictions
+from utils.trainer_qa import QuestionAnsweringTrainer
+from utils.utils_qa import check_sanity, postprocess_qa_predictions
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,6 @@ class MRC:
             self.train_dataset = self.train_dataset.map(
                 self.prepare_train_features,
                 batched=True,  # default batch_size = 1000
-                num_proc=self.config.utils.num_workers,
                 remove_columns=self.train_dataset.column_names,
                 load_from_cache_file=not self.config.utils.overwrite_cache,
             )
@@ -78,7 +77,6 @@ class MRC:
         self.eval_dataset = self.eval_dataset.map(
             self.prepare_validation_features,
             batched=True,
-            num_proc=self.config.utils.num_workers,
             remove_columns=eval_dataset.column_names,
             load_from_cache_file=not self.config.utils.overwrite_cache,
         )
@@ -100,7 +98,6 @@ class MRC:
         self.predict_dataset = self.predict_dataset.map(
             self.prepare_validation_features,
             batched=True,
-            num_proc=self.config.utils.num_workers,
             remove_columns=predict_dataset.column_names,
             load_from_cache_file=not self.config.utils.overwrite_cache,
         )
@@ -210,12 +207,21 @@ class MRC:
         """
         Evaluation/Prediction에서 start logits과 end logits을 original context의 정답과 match하는 함수
         """
+        args = self.config.retriever
+        if args.type == "sparse":
+            prefix = f"tfidf{args.sparse.tfidf_num_features}"
+            if args.sparse.lsa:
+                prefix += f"_lsa{args.sparse.lsa_num_features}"
+            if args.faiss.use_faiss:
+                prefix += f"_faiss{args.faiss.num_clusters}_{args.faiss.metric}"
+
         predictions = postprocess_qa_predictions(
             examples=examples,
             features=features,
             predictions=predictions,
             max_answer_length=self.config.utils.max_answer_length,
             output_dir=self.training_args.output_dir,
+            prefix=prefix,
         )
         # Metric을 구할 수 있도록 Format을 맞춰줍니다.
         formatted_predictions = [{"id": k, "prediction_text": v} for k, v in predictions.items()]
