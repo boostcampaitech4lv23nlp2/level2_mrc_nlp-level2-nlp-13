@@ -1,20 +1,14 @@
 import logging
 import os
-import omegaconf
-
-from typing import Optional, Union
 from dataclasses import dataclass, field
-from datasets import Dataset, load_metric
-from transformers import (
-    AutoModelForQuestionAnswering,
-    AutoTokenizer,
-    DataCollatorWithPadding,
-    EvalPrediction,
-    TrainingArguments,
-)
-from utils.utils_qa import check_sanity, postprocess_qa_predictions
-from utils.trainer_qa import QuestionAnsweringTrainer
+from typing import Optional, Union
 
+import omegaconf
+from datasets import Dataset, load_metric
+from transformers import AutoModelForQuestionAnswering, AutoTokenizer, DataCollatorWithPadding, EvalPrediction, TrainingArguments
+
+from utils.trainer_qa import QuestionAnsweringTrainer
+from utils.utils_qa import check_sanity, postprocess_qa_predictions
 
 logger = logging.getLogger(__name__)
 
@@ -221,14 +215,23 @@ class MRC:
             if args.faiss.use_faiss:
                 prefix += f"_faiss{args.faiss.num_clusters}_{args.faiss.metric}"
 
-        predictions = postprocess_qa_predictions(
-            examples=examples,
-            features=features,
-            predictions=predictions,
-            max_answer_length=self.config.utils.max_answer_length,
-            output_dir=self.training_args.output_dir,
-            prefix=prefix,
-        )
+            predictions = postprocess_qa_predictions(
+                examples=examples,
+                features=features,
+                predictions=predictions,
+                max_answer_length=self.config.utils.max_answer_length,
+                output_dir=self.training_args.output_dir,
+                prefix=prefix,
+            )
+        elif args.type == "dense":
+            predictions = postprocess_qa_predictions(
+                examples=examples,
+                features=features,
+                predictions=predictions,
+                max_answer_length=self.config.utils.max_answer_length,
+                output_dir=self.training_args.output_dir,
+                prefix=None,
+            )
         # Metric을 구할 수 있도록 Format을 맞춰줍니다.
         formatted_predictions = [{"id": k, "prediction_text": v} for k, v in predictions.items()]
 

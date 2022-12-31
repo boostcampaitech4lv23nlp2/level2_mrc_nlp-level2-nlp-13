@@ -192,9 +192,6 @@ model/save_models/
 
 # Saved model
 model.pt
-output.csv
-output_n.csv
-README.md
 
 save_models/
 saved_models/
@@ -202,6 +199,7 @@ config/*
 !config/base_config.yaml
 outputs/
 
+*.csv
 data/*.csv
 predictions/
 best_model/
