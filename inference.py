@@ -77,6 +77,8 @@ def main(args):
             datasets=datasets,
             config=config,
         )
+    elif config.retriever.type == "dense":
+        datasets = run_dense_retrieval(datasets, config)
 
     #### eval dataset & eval example - predictions.json 생성됨
     reader.predict(predict_dataset=datasets["validation"])
@@ -114,9 +116,18 @@ def run_sparse_retrieval(
 
 def run_dense_retrieval(datasets, config):
     retriever = DenseRetrieval(config)
-    retriever.get_dense_embedding()
-
+    retriever.get_dense_passage_embedding()
     df = retriever.retrieve(datasets["validation"])
+
+    f = Features(
+        {
+            "context": Value(dtype="string", id=None),
+            "id": Value(dtype="string", id=None),
+            "question": Value(dtype="string", id=None),
+        }
+    )
+    datasets = DatasetDict({"validation": Dataset.from_pandas(df, features=f)})
+    return datasets
 
 
 if __name__ == "__main__":

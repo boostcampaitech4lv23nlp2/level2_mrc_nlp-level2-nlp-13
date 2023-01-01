@@ -25,11 +25,12 @@ from typing import Any, Optional, Tuple
 
 import numpy as np
 import torch
-from arguments import DataTrainingArguments, ModelArguments
 from datasets import DatasetDict
 from tqdm.auto import tqdm
 from transformers import PreTrainedTokenizerFast, TrainingArguments, is_torch_available
 from transformers.trainer_utils import get_last_checkpoint
+
+from utils.arguments import DataTrainingArguments, ModelArguments
 
 logger = logging.getLogger(__name__)
 
@@ -238,16 +239,16 @@ def postprocess_qa_predictions(
 
         prediction_file = os.path.join(
             output_dir,
-            "predictions.json" if prefix is None else f"predictions_{prefix}".json,
+            "predictions.json" if prefix is None else f"predictions_{prefix}.json",
         )
         nbest_file = os.path.join(
             output_dir,
-            "nbest_predictions.json" if prefix is None else f"nbest_predictions_{prefix}".json,
+            "nbest_predictions.json" if prefix is None else f"nbest_predictions_{prefix}.json",
         )
         if version_2_with_negative:
             null_odds_file = os.path.join(
                 output_dir,
-                "null_odds.json" if prefix is None else f"null_odds_{prefix}".json,
+                "null_odds.json" if prefix is None else f"null_odds_{prefix}.json",
             )
 
         logger.info(f"Saving predictions to {prediction_file}.")

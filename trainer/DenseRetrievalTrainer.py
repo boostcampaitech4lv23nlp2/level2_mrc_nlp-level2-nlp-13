@@ -130,7 +130,7 @@ class DenseRetrievalTrainer:
 
         if not os.path.exists("./saved_models/DPR/passage_embedding_vectors/"):
             os.makedirs("./saved_models/DPR/passage_embedding_vectors/")
-        with open(f"./saved_models/DPR/passage_embedding_vectors/p_embs_epoch_{epoch}.bin", "wb") as f:
+        with open(f"./saved_models/DPR/passage_embedding_vectors/p_embs_epoch_{epoch+1}.bin", "wb") as f:
             pickle.dump(p_embs, f)
 
         # Question Embeddig 생성
