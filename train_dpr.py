@@ -6,13 +6,12 @@ import sys
 
 import pytz
 import torch
-from omegaconf import OmegaConf
-from transformers import AutoTokenizer, TrainingArguments, set_seed
-
 import wandb
 from dataset.DPR_Dataset import DenseRetrievalTrainDataset, DenseRetrievalValidDataset
 from model.Retrieval.BertEncoder import BertEncoder
+from omegaconf import OmegaConf
 from trainer.DenseRetrievalTrainer import DenseRetrievalTrainer
+from transformers import AutoTokenizer, TrainingArguments, set_seed
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +64,7 @@ def main(config):
         max_context_length=config.DPR.tokenizer.max_context_length,
         max_question_length=config.DPR.tokenizer.max_question_length,
         tokenizer=tokenizer,
+        hard_negative=config.DPR.train.hard_negative,
     )
     valid_dataset = DenseRetrievalValidDataset(
         data_path=config.DPR.path.valid,

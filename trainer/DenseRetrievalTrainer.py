@@ -45,14 +45,6 @@ class DenseRetrievalTrainer:
 
             if torch.cuda.is_available():
                 batch = tuple(t.cuda() for t in batch)
-            # try:
-            #     print("@@@@@@@@@@ batch[0] shape", batch[0].shape)
-            #     print("@@@@@@@@@@ batch[3] shape", batch[3].shape)
-            #     print("@@@@@@@@@@ batch[6] shape", batch[6].shape)
-            # except:
-            #     print("@@@@@@@@@@ batch[0] shape 출력 불가능, batch[0] : ", batch[0])
-            #     print("@@@@@@@@@@ batch[3] shape 출력 불가능, batch[3] : ", batch[3])
-            #     print("@@@@@@@@@@ batch[3] shape 출력 불가능, batch[6] : ", batch[6])
 
             p_inputs = {
                 "input_ids": batch[0],
@@ -66,11 +58,37 @@ class DenseRetrievalTrainer:
                 "token_type_ids": batch[5],
             }
 
-            p_outputs = self.p_encoder(**p_inputs)  # (batch_size, 768)
-            q_outputs = self.q_encoder(**q_inputs)  # (batch_size, 768)
+            # hn_inputs = {
+            #     "input_ids": batch[6],  # (batch_size, 256)
+            #     "attention_mask": batch[7],  # (batch_size, 256)
+            #     "token_type_ids": batch[8],  # (batch_size, 256)
+            # }
 
-            # Calculate Similarity score & loss
-            sim_score = torch.matmul(q_outputs, torch.transpose(p_outputs, 0, 1))  # (batch_size, batch_size)
+            if self.config.DPR.train.hard_negative:  # hard negative 설정
+                q_outputs = self.q_encoder(**q_inputs)  # (batch_size, 768)
+
+                # Calculate Similarity score & loss
+                """
+                hard negatvie 연산
+                query (batch_size, 768) * passage^T (768, batch_size + 1)
+                """
+                sim_score = torch.cuda.FloatTensor()
+                for i in range(len(batch[0])):
+                    p_input = {
+                        "input_ids": torch.cat([p_inputs["input_ids"], torch.unsqueeze(batch[6][i], dim=0)], dim=0),
+                        "attention_mask": torch.cat([p_inputs["attention_mask"], torch.unsqueeze(batch[7][i], dim=0)], dim=0),
+                        "token_type_ids": torch.cat([p_inputs["token_type_ids"], torch.unsqueeze(batch[8][i], dim=0)], dim=0),
+                    }
+                    p_output = self.p_encoder(**p_input)
+
+                    sim_score = torch.cat([torch.unsqueeze(torch.matmul(q_outputs[i], torch.transpose(p_output, 0, 1)), dim=1), sim_score])
+                sim_score = sim_score.reshape(q_outputs.size()[0], -1)  # (batch_size, batch_size + 1)
+            else:
+                p_outputs = self.p_encoder(**p_inputs)  # (batch_size, 768)
+                q_outputs = self.q_encoder(**q_inputs)  # (batch_size, 768)
+
+                # Calculate Similarity score & loss
+                sim_score = torch.matmul(q_outputs, torch.transpose(p_outputs, 0, 1))  # (batch_size, batch_size)
 
             # target = position of positive sample = diagonal
             targets = torch.arange(0, self.args.per_device_train_batch_size).long()
