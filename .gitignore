@@ -192,9 +192,6 @@ model/save_models/
 
 # Saved model
 model.pt
-output.csv
-output_n.csv
-README.md
 
 save_models/
 saved_models/
@@ -202,9 +199,12 @@ config/*
 !config/base_config.yaml
 outputs/
 
+*.csv
 data/*.csv
 prediction/
 predict/
 best_model/
 klue-roberta-retrained/
 klue-bert_base-retrained/
+predictions/
+best_model/

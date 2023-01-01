@@ -24,7 +24,7 @@ def main(args):
     config = OmegaConf.load(f"./config/{args.config}.yaml")
     # wandb 설정
     now_time = datetime.datetime.now(pytz.timezone("Asia/Seoul")).strftime("%m-%d-%H-%M")
-    run_id = f"{config.wandb.name}_{now_time}"
+    run_id = f"mrc_{config.wandb.name}_{now_time}"
     wandb.init(
         entity=config.wandb.team,
         project=config.wandb.project,
@@ -70,10 +70,17 @@ def main(args):
         tokenizer,
         model,
         datasets["train"],
-        datasets["validation"],
     )
-    reader.train()
-    reader.evaluate()
+    reader.train(checkpoint=config.path.resume)
+    reader.evaluate(datasets["validation"])
+
+    # share the pretrained model to huggingface hub
+    if config.hf_hub.push_to_hub is True:
+        save_name = config.hf_hub.save_name
+        if not save_name.startswith("nlpotato/"):
+            save_name = "nlpotato/" + save_name
+        model.push_to_hub(config.hf_hub.save_name)
+        tokenizer.push_to_hub(config.hf_hub.save_name)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,96 @@
+import json
+
+from datasets import load_from_disk
+from torch.utils.data import Dataset
+
+
+class DenseRetrievalTrainDataset(Dataset):
+    """
+    Dense Passage Retrieval Train을 위한 Dataset
+    """
+
+    def __init__(self, data_path, max_context_length, max_question_length, tokenizer):
+        self.max_context_length = max_context_length
+        self.max_question_length = max_question_length
+        self.tokenizer = tokenizer
+        self.preprocessed_data = self.preprocess(data_path)
+
+    def __len__(self):
+        return self.preprocessed_data[0]["input_ids"].size(0)
+
+    def __getitem__(self, idx):
+        return (
+            self.preprocessed_data[0]["input_ids"][idx],  # context
+            self.preprocessed_data[0]["attention_mask"][idx],  # context
+            self.preprocessed_data[0]["token_type_ids"][idx],  # context
+            self.preprocessed_data[1]["input_ids"][idx],  # question
+            self.preprocessed_data[1]["attention_mask"][idx],  # question
+            self.preprocessed_data[1]["token_type_ids"][idx],  # question
+        )
+
+    def preprocess(self, data_path):
+        data = load_from_disk(data_path)
+
+        data_question = data["question"]
+        data_context = data["context"]
+
+        p_seqs = self.tokenizer(data_context, padding="max_length", max_length=self.max_context_length, truncation=True, return_tensors="pt")
+        q_seqs = self.tokenizer(data_question, padding="max_length", max_length=self.max_question_length, truncation=True, return_tensors="pt")
+
+        return p_seqs, q_seqs
+
+
+class DenseRetrievalValidDataset(Dataset):
+    """
+    Dense Passage Retrieval Validation을 위한 Dataset
+    """
+
+    def __init__(self, data_path, max_context_length, tokenizer):
+        self.max_context_length = max_context_length
+        self.tokenizer = tokenizer
+        self.preprocessed_data = self.preprocess(data_path)
+
+    def __len__(self):
+        return self.preprocessed_data["input_ids"].size(0)
+
+    def __getitem__(self, idx):
+        return (
+            self.preprocessed_data["input_ids"][idx],  # context
+            self.preprocessed_data["attention_mask"][idx],  # context
+            self.preprocessed_data["token_type_ids"][idx],  # context
+        )
+
+    def preprocess(self, data_path):
+        if data_path in "./data/train_dataset/validation":
+            data = load_from_disk(data_path)
+            data_context = data["context"]
+            p_seqs = self.tokenizer(data_context, padding="max_length", max_length=self.max_context_length, truncation=True, return_tensors="pt")
+            return p_seqs
+
+        elif data_path in "./data/wikipedia_documents.json":
+            with open(data_path, "r") as f:
+                wiki = json.load(f)
+            data_context = list(dict.fromkeys(w["text"] for w in wiki.values()))
+            p_seqs = self.tokenizer(data_context, padding="max_length", max_length=self.max_context_length, truncation=True, return_tensors="pt")
+            return p_seqs
+
+
+class DenseRetrievalDataset(Dataset):
+    """
+    inference 시 받을 queries을 위한 데이터셋
+    """
+
+    def __init__(self, input_ids, attention_mask, token_type_ids):
+        self.input_ids = input_ids
+        self.attention_mask = attention_mask
+        self.token_type_ids = token_type_ids
+
+    def __len__(self):
+        return self.input_ids.size(0)
+
+    def __getitem__(self, idx):
+        return (
+            self.input_ids[idx],
+            self.attention_mask[idx],
+            self.token_type_ids[idx],
+        )
