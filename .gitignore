@@ -204,5 +204,7 @@ outputs/
 
 data/*.csv
 prediction/
+predict/
 best_model/
 klue-roberta-retrained/
+klue-bert_base-retrained/

@@ -32,7 +32,7 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
-from utils_qa import check_no_error, postprocess_qa_predictions
+from utils_qa import postprocess_qa_predictions
 
 logger = logging.getLogger(__name__)
 
@@ -172,10 +172,10 @@ def run_mrc(
     pad_on_right = tokenizer.padding_side == "right"
 
     # 오류가 있는지 확인합니다.
-    last_checkpoint, max_seq_length = check_no_error(
-        data_args, training_args, datasets, tokenizer
-    )
-
+    # last_checkpoint, max_seq_length = check_no_error(
+    #     data_args, training_args, datasets, tokenizer
+    # )
+    max_seq_length = 384
     # Validation preprocessing / 전처리를 진행합니다.
     def prepare_validation_features(examples):
         # truncation과 padding(length가 짧을때만)을 통해 toknization을 진행하며, stride를 이용하여 overflow를 유지합니다.

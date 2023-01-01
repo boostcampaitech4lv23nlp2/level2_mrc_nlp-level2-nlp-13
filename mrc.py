@@ -28,7 +28,7 @@ class MRC:
     eval_dataset: Optional[DatasetDict] = None
     test_dataset: Optional[DatasetDict] = None
 
-    check_sanity(config, tokenizer)
+    #check_sanity(config, tokenizer)
     # checkpoint = get_last_checkpoint
 
     def __post_init__(self):
