@@ -9,6 +9,7 @@ retriever:
   type: sparse # sparse or dense
   topk: 10
   sparse:
+    embedding_type: bm25 # tfidf or bm25
     tfidf_num_features: 50000 # default: 50000. max_num_features for tfidf vectorizer
     lsa: False # apply LSA or not
     lsa_num_features: 1024 # default: 100.
@@ -18,13 +19,13 @@ retriever:
     metric: inner_product # default: inner_product . l2 or inner_product available.
 
 model:
-  name: klue/roberta-base 
+  name: klue/bert-base 
 
 tokenizer:
   max_length: 384
   padding: max_length
   stride: 128
-  return_token_type_ids: False # False for Roberta models
+  return_token_type_ids: True # False for Roberta models
 
 optimizer: # default AdamW
   learning_rate: 1e-5
@@ -69,7 +70,8 @@ DPR:
   train:
     output_dir: # default: saved_models/DPR/model/{wandb_name}_{time}
     num_train_epochs: 30
-    batch_size: 8
+    batch_size: 4
+    hard_negative: True
 
   utils:
     valid_analysis: False # train epoch마다 validation 결과를 csv로 저장할지 여부
