@@ -49,8 +49,8 @@ class DenseRetrievalTrainer:
         logger.addHandler(file_handler)
 
     def configure_optimizers(self, optimizer_grouped_parameters, config):
-        if config.DPR.optimizer.name == "AdamW":
-            optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=config.DPR.optimizer.learning_rate)
+        if config.dense.optimizer.name == "AdamW":
+            optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=config.dense.optimizer.learning_rate)
         return optimizer
 
     def train_per_epoch(self, epoch_iterator: DataLoader, optimizer, scheduler):
@@ -141,7 +141,7 @@ class DenseRetrievalTrainer:
 
                 q_seq = self.tokenizer(
                     [query],
-                    max_length=self.config.DPR.tokenizer.max_question_length,
+                    max_length=self.config.dense.tokenizer.max_question_length,
                     padding="max_length",
                     truncation=True,
                     return_tensors="pt",
@@ -189,7 +189,7 @@ class DenseRetrievalTrainer:
                 if valid_context[idx] in top_100_passages:
                     top_100 += 1
 
-        if self.config.DPR.utils.valid_analysis:
+        if self.config.dense.utils.valid_analysis:
             if not os.path.exists("./results/DPR/"):
                 os.makedirs("./results/DPR/")
             checking_df.to_csv(f"./results/DPR/checking_df_epoch_{epoch}.csv", index=False)
