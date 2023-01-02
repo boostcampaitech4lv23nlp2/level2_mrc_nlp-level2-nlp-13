@@ -25,7 +25,7 @@ def main(config):
     wandb.init(
         entity=config.wandb.team,
         project=config.wandb.project,
-        group=config.model.name,
+        group=config.model.name_or_path,
         id=run_id,
         tags=config.wandb.tags,
     )

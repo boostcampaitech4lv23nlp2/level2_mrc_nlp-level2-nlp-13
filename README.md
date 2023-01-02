@@ -24,6 +24,7 @@ Sparse Embedding을 사용하시려면 `confing.path.type`을 `sparse`로 선택
 Scikit-learn의 TfidfVectorizer로 query 문장과 context 문서들을 임베딩합니다. `config.retriever.sparse.tfidf_num_features`로 tfidf 벡터의 최대 크기를 지정할 수 있습니다. fit이 끝나고 tf-idf 벡터화된 context 문서들과 TfidfVectorizer 객체는 context 문장들이 저장된 `config.path.context` 폴더에 저장됩니다.
 
 ### Dense
+Dense Embedding을 사용하시려면 `config.retriever.type`을 `dense`로 입력해야 합니다.
 
 ### Faiss
 `config.retriever.faiss.use_faiss` 설정을 통하여 retrieval 시 Faiss를 사용할지 결정할 수 있습니다. `config.retriever.faiss.num_clusters`에 지정된 값으로 IndexIVFScalarQuantizer가 만들어내는 클러스터의 갯수를 조정할 수 있으며, 인덱싱 및 거리 계산에 쓰이는 quantizer 방식도 `config.retriever.faiss.metric`으로 정할 수 있습니다. 
