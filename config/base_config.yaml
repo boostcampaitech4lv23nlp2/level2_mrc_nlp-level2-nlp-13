@@ -1,8 +1,8 @@
 path:
-  train: ../data/train_dataset
-  predict: ../data/test_dataset
-  data: ../data/
-  context: ../data/wikipedia_documents.json
+  train: ./data/train_dataset
+  predict: ./data/test_dataset
+  data: ./data/
+  context: ./data/wikipedia_documents.json
   resume: 
 
 retriever:
@@ -44,6 +44,36 @@ train:
   save_total_limit: 1 # default 1: save the last and the best
   load_best_model_at_end: False 
 
+DPR: 
+  path:
+    train: ./data/train_dataset/train
+    valid:  ./data/wikipedia_documents.json
+    predict: 
+
+  model:
+    name: klue/bert-base
+    best_p_encoder_path: "saved_models/DPR/encoder/p_encoder_best_top_30" 
+    best_q_encoder_path: "saved_models/DPR/encoder/q_encoder_best_top_30"
+    saved_p_embs_epoch: 19 # 사용할 saved p_embs epoch (inference 시 사용)
+
+  tokenizer:
+    max_context_length: 512
+    max_question_length: 256
+
+  optimizer:
+    name: AdamW
+    learning_rate: 1e-5
+    weight_decay: 0.01
+    gradient_accumulation_steps: 1
+
+  train:
+    output_dir: # default: saved_models/DPR/model/{wandb_name}_{time}
+    num_train_epochs: 30
+    batch_size: 8
+
+  utils:
+    valid_analysis: False # train epoch마다 validation 결과를 csv로 저장할지 여부
+
 utils:
   seed: 42
   overwrite_cache: False
@@ -52,7 +82,7 @@ utils:
 wandb:
   team: next-level-potato # team account name
   project: MRC # project name
-  name: # 실험자 명
+  name:  # 실험자 명
   tags: [] # tag
 
 hf_hub:

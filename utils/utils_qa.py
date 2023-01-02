@@ -30,6 +30,8 @@ from tqdm.auto import tqdm
 from transformers import PreTrainedTokenizerFast, TrainingArguments, is_torch_available
 from transformers.trainer_utils import get_last_checkpoint
 
+from utils.arguments import DataTrainingArguments, ModelArguments
+
 logger = logging.getLogger(__name__)
 
 
