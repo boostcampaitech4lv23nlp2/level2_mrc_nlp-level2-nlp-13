@@ -207,13 +207,13 @@ class MRC:
         """
         Evaluation/Prediction에서 start logits과 end logits을 original context의 정답과 match하는 함수
         """
-        args = self.config.retriever
-        if args.type == "sparse":
-            prefix = f"tfidf{args.sparse.tfidf_num_features}"
-            if args.sparse.lsa:
-                prefix += f"_lsa{args.sparse.lsa_num_features}"
-            if args.faiss.use_faiss:
-                prefix += f"_faiss{args.faiss.num_clusters}_{args.faiss.metric}"
+        if self.config.retriever.type == "sparse":
+            args = self.config.sparse
+            prefix = f"tfidf{args.tfidf_num_features}"
+            if args.lsa:
+                prefix += f"_lsa{args.lsa_num_features}"
+            if self.config.faiss.use_faiss:
+                prefix += f"_faiss{self.config.faiss.num_clusters}_{self.config.faiss.metric}"
 
             predictions = postprocess_qa_predictions(
                 examples=examples,
@@ -223,7 +223,7 @@ class MRC:
                 output_dir=self.training_args.output_dir,
                 prefix=prefix,
             )
-        elif args.type == "dense" or "hybrid":
+        elif self.config.retriever.type == "dense" or "hybrid":
             predictions = postprocess_qa_predictions(
                 examples=examples,
                 features=features,

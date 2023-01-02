@@ -25,7 +25,7 @@ def main(args):
     config = OmegaConf.load(f"./config/{args.config}.yaml")
     now_time = datetime.datetime.now(pytz.timezone("Asia/Seoul")).strftime("%m-%d-%H-%M")
     if config.train.output_dir is None:
-        trained_model = config.model.name
+        trained_model = config.model.name_or_path
         if trained_model.startswith("./saved_models"):
             trained_model = trained_model.replace("./saved_models/", "")  # dropping "saved_models/" for sake of saving
         elif trained_model.startswith("saved_models"):
@@ -97,7 +97,7 @@ def run_sparse_retrieval(
     )
     retriever.get_sparse_embedding()
     retriever.build_faiss()
-    if config.retriever.faiss.use_faiss:
+    if config.faiss.use_faiss:
         df = retriever.retrieve_faiss(datasets["validation"])
     else:
         df = retriever.retrieve(datasets["validation"])

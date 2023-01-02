@@ -40,9 +40,9 @@ class DenseRetrieval:
         data_path: Optional[str] = "./data/wikipedia_documents.json",
     ):
         self.config = config
-        self.tokenizer = AutoTokenizer.from_pretrained(self.config.DPR.model.name)
-        self.p_encoder = BertEncoder.from_pretrained(self.config.DPR.model.best_p_encoder_path)
-        self.q_encoder = BertEncoder.from_pretrained(self.config.DPR.model.best_q_encoder_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.config.dense.model.name_or_path)
+        self.p_encoder = BertEncoder.from_pretrained(self.config.dense.model.best_p_encoder_path)
+        self.q_encoder = BertEncoder.from_pretrained(self.config.dense.model.best_q_encoder_path)
         self.passage_embedding_vectors = None  # get_dense_passage_embedding()에서 생성
 
         self.data_path = data_path
@@ -53,8 +53,8 @@ class DenseRetrieval:
 
     def get_dense_passage_embedding(self):
         logger.info("Get dense passage embedding")
-        if os.path.isfile(f"./saved_models/DPR/passage_embedding_vectors/p_embs_epoch_{self.config.DPR.model.saved_p_embs_epoch}.bin"):
-            with open(f"./saved_models/DPR/passage_embedding_vectors/p_embs_epoch_{self.config.DPR.model.saved_p_embs_epoch}.bin", "rb") as f:
+        if os.path.isfile(f"./saved_models/DPR/passage_embedding_vectors/p_embs_epoch_{self.config.dense.model.saved_p_embs_epoch}.bin"):
+            with open(f"./saved_models/DPR/passage_embedding_vectors/p_embs_epoch_{self.config.dense.model.saved_p_embs_epoch}.bin", "rb") as f:
                 self.passage_embedding_vectors = pickle.load(f)
             logger.info("Embedding pickle loaded")
 
@@ -64,14 +64,14 @@ class DenseRetrieval:
             p_seqs = self.tokenizer(
                 self.contexts,
                 padding="max_length",
-                max_length=self.config.DPR.tokenizer.max_context_length,
+                max_length=self.config.dense.tokenizer.max_context_length,
                 truncation=True,
                 return_tensors="pt",
             )
             # Dataset
-            p_dataset = DenseRetrievalValidDataset(self.data_path, self.config.DPR.tokenizer.max_context_length, self.tokenizer)
+            p_dataset = DenseRetrievalValidDataset(self.data_path, self.config.dense.tokenizer.max_context_length, self.tokenizer)
             # DataLoader
-            p_dataloader = torch.utils.data.DataLoader(p_dataset, batch_size=self.config.DPR.train.batch_size, shuffle=False, num_workers=4)
+            p_dataloader = torch.utils.data.DataLoader(p_dataset, batch_size=self.config.dense.train.batch_size, shuffle=False, num_workers=4)
             # Make passage embedding
             for item in tqdm(p_dataloader):
                 self.passage_embedding_vectors.extend(
@@ -140,7 +140,7 @@ class DenseRetrieval:
 
     def get_relevant_doc(self, query, topk):
         q_seqs = self.tokenizer(
-            [query], max_length=self.config.DPR.tokenizer.max_question_length, padding="max_length", truncation=True, return_tensors="pt"
+            [query], max_length=self.config.dense.tokenizer.max_question_length, padding="max_length", truncation=True, return_tensors="pt"
         )
         q_emb = self.q_encoder(**q_seqs)  # (1, 768)
 
@@ -155,7 +155,7 @@ class DenseRetrieval:
 
     def get_relevant_doc_bulk(self, queries, topk):
         q_seqs = self.tokenizer(
-            queries, max_length=self.config.DPR.tokenizer.max_question_length, padding="max_length", truncation=True, return_tensors="pt"
+            queries, max_length=self.config.dense.tokenizer.max_question_length, padding="max_length", truncation=True, return_tensors="pt"
         )
         q_dataset = DenseRetrievalDataset(
             input_ids=q_seqs["input_ids"], attention_mask=q_seqs["attention_mask"], token_type_ids=q_seqs["token_type_ids"]
@@ -202,7 +202,6 @@ class SparseRetrieval:
 
         self.data_path = config.path.data
         context_path = config.path.context
-        args = config.retriever.sparse
         with open(context_path, "r", encoding="utf-8") as f:
             wiki = json.load(f)
 
@@ -211,25 +210,25 @@ class SparseRetrieval:
         self.ids = list(range(len(self.contexts)))
 
         # Transform by vectorizer
-        self.tfidf_num_features = args.tfidf_num_features
+        self.tfidf_num_features = config.sparse.tfidf_num_features
         self.tfidf_vectorizer = TfidfVectorizer(
             tokenizer=tokenize_fn,
             ngram_range=(1, 2),
             max_features=self.tfidf_num_features,
         )
-        self.apply_lsa = args.lsa
+        self.apply_lsa = config.sparse.lsa
         self.lsa_vectorizer = None
-        self.n_lsa_features = args.lsa_num_features
+        self.n_lsa_features = config.sparse.lsa_num_features
         if self.apply_lsa is True:
             self.lsa_vectorizer = TruncatedSVD(
-                n_components=args.lsa_num_features,
+                n_components=config.sparse.lsa_num_features,
                 algorithm="arpack",
             )
 
         self.p_embedding = None  # get_sparse_embedding()로 생성합니다
         self.indexer = None  # build_faiss()로 생성합니다.
-        self.metric = config.retriever.faiss.metric
-        self.num_clusters = config.retriever.faiss.num_clusters
+        self.metric = config.faiss.metric
+        self.num_clusters = config.faiss.num_clusters
         self.topk = config.retriever.topk
 
     def get_sparse_embedding(self) -> None:
@@ -549,7 +548,7 @@ class HybridRetrieval:
 
         q_seqs = self.dense_retriever.tokenizer(
             query_or_dataset["question"],
-            max_length=self.config.DPR.tokenizer.max_question_length,
+            max_length=self.config.dense.tokenizer.max_question_length,
             padding="max_length",
             truncation=True,
             return_tensors="pt",
