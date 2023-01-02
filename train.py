@@ -65,14 +65,14 @@ def main(args):
     )
 
     reader = MRC(
-        config,
-        training_args,
-        tokenizer,
-        model,
-        datasets["train"],
+        config=config,
+        training_args=training_args,
+        tokenizer=tokenizer,
+        model=model,
+        datasets=datasets,
     )
     reader.train(checkpoint=config.path.resume)
-    reader.evaluate(datasets["validation"])
+    reader.evaluate()
 
     # share the pretrained model to huggingface hub
     if config.hf_hub.push_to_hub is True:
