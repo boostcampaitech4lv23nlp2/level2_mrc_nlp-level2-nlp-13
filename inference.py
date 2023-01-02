@@ -3,15 +3,13 @@ Open-Domain Question Answering 을 수행하는 inference 코드 입니다.
 
 대부분의 로직은 train.py 와 비슷하나 retrieval, predict 부분이 추가되어 있습니다.
 """
-import argparse
 import datetime
 import logging
+import argparse
 import os
 import sys
-from typing import Callable, Dict, List, NoReturn, Tuple
-
-import numpy as np
 import pytz
+from typing import Callable, Dict, List, NoReturn, Tuple
 from datasets import Dataset, DatasetDict, Features, Sequence, Value, load_from_disk, load_metric
 from omegaconf import OmegaConf, dictconfig
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer, TrainingArguments, set_seed
