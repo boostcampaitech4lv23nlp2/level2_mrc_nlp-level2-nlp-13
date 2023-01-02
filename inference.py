@@ -13,11 +13,10 @@ from typing import Callable, Dict, List, NoReturn, Tuple
 import numpy as np
 import pytz
 from datasets import Dataset, DatasetDict, Features, Sequence, Value, load_from_disk, load_metric
-from omegaconf import OmegaConf, dictconfig
-from transformers import AutoModelForQuestionAnswering, AutoTokenizer, TrainingArguments, set_seed
-
 from mrc import MRC
+from omegaconf import OmegaConf, dictconfig
 from retrieval import DenseRetrieval, HybridRetrieval, SparseRetrieval
+from transformers import AutoModelForQuestionAnswering, AutoTokenizer, TrainingArguments, set_seed
 
 logger = logging.getLogger(__name__)
 
@@ -97,8 +96,9 @@ def run_sparse_retrieval(
         tokenize_fn=tokenize_fn,
         config=config,
     )
-    retriever.get_sparse_embedding()
-    retriever.build_faiss()
+    if config.retriever.sparse.embedding_type == "tfidf":
+        retriever.get_sparse_embedding()
+        retriever.build_faiss()
     if config.retriever.faiss.use_faiss:
         df = retriever.retrieve_faiss(datasets["validation"])
     else:
