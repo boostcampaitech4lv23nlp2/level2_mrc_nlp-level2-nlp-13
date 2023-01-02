@@ -71,8 +71,12 @@ def main(args):
         model,
         datasets["train"],
     )
-    reader.train(checkpoint=config.path.resume)
-    reader.evaluate(datasets["validation"])
+    if config['hyper_parameter_search'] is True:
+        best_run = reader.trainer.hyperparameter_search(
+        n_trials=3, direction="maximize")
+    else:
+        reader.train(checkpoint=config.path.resume)
+        reader.evaluate(datasets["validation"])
 
     # share the pretrained model to huggingface hub
     if config.hf_hub.push_to_hub is True:
