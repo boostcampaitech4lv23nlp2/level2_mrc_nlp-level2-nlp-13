@@ -3,16 +3,14 @@ Open-Domain Question Answering 을 수행하는 inference 코드 입니다.
 
 대부분의 로직은 train.py 와 비슷하나 retrieval, predict 부분이 추가되어 있습니다.
 """
-import argparse
 import datetime
 import logging
+import argparse
 import os
 import sys
-from typing import Callable, Dict, List, NoReturn, Tuple
-
-import numpy as np
 import pytz
-from datasets import Dataset, DatasetDict, Features, Sequence, Value, load_from_disk, load_metric
+from typing import Callable, List
+from datasets import Dataset, DatasetDict, Features, Value, load_from_disk
 from omegaconf import OmegaConf, dictconfig
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer, TrainingArguments, set_seed
 
@@ -27,7 +25,7 @@ def main(args):
     config = OmegaConf.load(f"./config/{args.config}.yaml")
     now_time = datetime.datetime.now(pytz.timezone("Asia/Seoul")).strftime("%m-%d-%H-%M")
     if config.train.output_dir is None:
-        trained_model = config.model.name
+        trained_model = config.model.name_or_path
         if trained_model.startswith("./saved_models"):
             trained_model = trained_model.replace("./saved_models/", "")  # dropping "saved_models/" for sake of saving
         elif trained_model.startswith("saved_models"):
@@ -53,15 +51,15 @@ def main(args):
     print(datasets)
 
     tokenizer = AutoTokenizer.from_pretrained(
-        config.model.name,  # name_or_path
-        from_tf=bool(".ckpt" in config.model.name),
+        config.model.name_or_path,
+        from_tf=bool(".ckpt" in config.model.name_or_path),
         use_fast=True,
     )
     model = AutoModelForQuestionAnswering.from_pretrained(
-        config.model.name,
-        from_tf=bool(".ckpt" in config.model.name),
+        config.model.name_or_path,
+        from_tf=bool(".ckpt" in config.model.name_or_path),
     )
-    print(f"Get the pretrained model {config.model.name}")
+    print(f"Get the pretrained model {config.model.name_or_path}")
 
     reader = MRC(
         config,
@@ -99,7 +97,7 @@ def run_sparse_retrieval(
     )
     retriever.get_sparse_embedding()
     retriever.build_faiss()
-    if config.retriever.faiss.use_faiss:
+    if config.faiss.use_faiss:
         df = retriever.retrieve_faiss(datasets["validation"])
     else:
         df = retriever.retrieve(datasets["validation"])
@@ -149,6 +147,6 @@ def run_hybrid_retrieval(tokenize_fn, datasets, config):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", "-c", type=str, default="base_config")
+    parser.add_argument("--config", "-c", type=str, default="custom_config")
     args, _ = parser.parse_known_args()
     main(args)
