@@ -17,7 +17,7 @@ from omegaconf import OmegaConf, dictconfig
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer, TrainingArguments, set_seed
 
 from mrc import MRC
-from retrieval import DenseRetrieval, SparseRetrieval
+from retrieval import DenseRetrieval, HybridRetrieval, SparseRetrieval
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +79,8 @@ def main(args):
         )
     elif config.retriever.type == "dense":
         datasets = run_dense_retrieval(datasets, config)
+    elif config.retriever.type == "hybrid":
+        datasets = run_hybrid_retrieval(tokenize_fn=tokenizer.tokenize, datasets=datasets, config=config)
 
     #### eval dataset & eval example - predictions.json 생성됨
     reader.predict(predict_dataset=datasets["validation"])
@@ -117,6 +119,21 @@ def run_sparse_retrieval(
 def run_dense_retrieval(datasets, config):
     retriever = DenseRetrieval(config)
     retriever.get_dense_passage_embedding()
+    df = retriever.retrieve(datasets["validation"])
+
+    f = Features(
+        {
+            "context": Value(dtype="string", id=None),
+            "id": Value(dtype="string", id=None),
+            "question": Value(dtype="string", id=None),
+        }
+    )
+    datasets = DatasetDict({"validation": Dataset.from_pandas(df, features=f)})
+    return datasets
+
+
+def run_hybrid_retrieval(tokenize_fn, datasets, config):
+    retriever = HybridRetrieval(tokenize_fn, config)
     df = retriever.retrieve(datasets["validation"])
 
     f = Features(

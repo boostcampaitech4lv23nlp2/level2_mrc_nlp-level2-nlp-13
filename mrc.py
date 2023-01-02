@@ -223,7 +223,7 @@ class MRC:
                 output_dir=self.training_args.output_dir,
                 prefix=prefix,
             )
-        elif args.type == "dense":
+        elif args.type == "dense" or "hybrid":
             predictions = postprocess_qa_predictions(
                 examples=examples,
                 features=features,
