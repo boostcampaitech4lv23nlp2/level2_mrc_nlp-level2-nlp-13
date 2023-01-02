@@ -18,7 +18,7 @@ retriever:
     metric: inner_product # default: inner_product . l2 or inner_product available.
 
 model:
-  name: klue/roberta-base 
+  name_or_path: klue/roberta-base 
 
 tokenizer:
   max_length: 384
