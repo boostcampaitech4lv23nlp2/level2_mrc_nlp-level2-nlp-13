@@ -51,15 +51,15 @@ def main(args):
     print(datasets)
 
     tokenizer = AutoTokenizer.from_pretrained(
-        config.model.name,  # name_or_path
-        from_tf=bool(".ckpt" in config.model.name),
+        config.model.name_or_path,
+        from_tf=bool(".ckpt" in config.model.name_or_path),
         use_fast=True,
     )
     model = AutoModelForQuestionAnswering.from_pretrained(
-        config.model.name,
-        from_tf=bool(".ckpt" in config.model.name),
+        config.model.name_or_path,
+        from_tf=bool(".ckpt" in config.model.name_or_path),
     )
-    print(f"Get the pretrained model {config.model.name}")
+    print(f"Get the pretrained model {config.model.name_or_path}")
 
     reader = MRC(
         config,
