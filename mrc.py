@@ -4,10 +4,10 @@ from dataclasses import dataclass, field
 from typing import Optional, Union
 
 import omegaconf
-from datasets import DatasetDict, load_metric
-from trainer_qa import QuestionAnsweringTrainer
+from datasets import Dataset, load_metric
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer, DataCollatorWithPadding, EvalPrediction, TrainingArguments
-from utils_qa import check_sanity, postprocess_qa_predictions
+from utils.trainer_qa import QuestionAnsweringTrainer
+from utils.utils_qa import check_sanity, postprocess_qa_predictions
 
 logger = logging.getLogger(__name__)
 
@@ -18,34 +18,19 @@ class MRC:
     training_args: TrainingArguments
     tokenizer: AutoTokenizer
     model: AutoModelForQuestionAnswering
-    train_dataset: Optional[DatasetDict] = None
-    eval_dataset: Optional[DatasetDict] = None
-    test_dataset: Optional[DatasetDict] = None
-
-    check_sanity(config, tokenizer)
-    # checkpoint = get_last_checkpoint
+    train_dataset: Optional[Dataset] = None
 
     def __post_init__(self):
-        if self.train_dataset:
+        check_sanity(self.config, self.tokenizer)
+
+        if self.train_dataset is not None:
             self.train_dataset = self.train_dataset.map(
                 self.prepare_train_features,
                 batched=True,  # default batch_size = 1000
-                num_proc=self.config.utils.num_workers,
                 remove_columns=self.train_dataset.column_names,
                 load_from_cache_file=not self.config.utils.overwrite_cache,
             )
 
-        self.eval_dataset_original = None
-        if self.eval_dataset:
-            self.eval_dataset_original = self.eval_dataset  # to be used as examples for trainer.evaluate()
-            self.eval_dataset = self.eval_dataset.map(
-                self.prepare_validation_features,
-                batched=True,
-                num_proc=self.config.utils.num_workers,
-                remove_columns=self.eval_dataset.column_names,
-                load_from_cache_file=not self.config.utils.overwrite_cache,
-            )
-            assert len(self.eval_dataset_original) != len(self.eval_dataset)
         # Data collator
         # flag가 True이면 이미 max length로 padding된 상태입니다.
         # 그렇지 않다면 data collator에서 padding을 진행해야합니다.
@@ -56,8 +41,6 @@ class MRC:
             model=self.model,
             args=self.training_args,
             train_dataset=self.train_dataset,
-            eval_dataset=self.eval_dataset,
-            eval_examples=self.eval_dataset_original,
             tokenizer=self.tokenizer,
             data_collator=data_collator,
             post_process_function=self.post_processing_function,
@@ -65,7 +48,7 @@ class MRC:
         )
 
     def train(self, checkpoint=None):
-        train_result = self.trainer.train()  ### resume_from_checkpoint
+        train_result = self.trainer.train(resume_from_checkpoint=checkpoint)
         self.trainer.save_model()  # Saves the tokenizer too for easy upload
 
         metrics = train_result.metrics
@@ -80,19 +63,48 @@ class MRC:
         with open(output_train_file, "w") as writer:
             logger.info("***** Train results *****")
             for key, value in sorted(train_result.metrics.items()):
-                logger.info(f"  {key} = {value}")
+                logger.info(f"{key} = {value}")
                 writer.write(f"{key} = {value}\n")
 
         # State 저장
         self.trainer.state.save_to_json(os.path.join(self.training_args.output_dir, "trainer_state.json"))
 
-    def evaluate(self, eval_dataset=None, eval_examples=None, ignore_keys=None):
+    def evaluate(self, eval_dataset, ignore_keys=None):
         logger.info("*** Evaluate ***")
-        metrics = self.trainer.evaluate(eval_dataset, eval_examples, ignore_keys)
+        self.mode = "eval"
+        self.eval_dataset = eval_dataset
+        self.eval_dataset = self.eval_dataset.map(
+            self.prepare_validation_features,
+            batched=True,
+            remove_columns=eval_dataset.column_names,
+            load_from_cache_file=not self.config.utils.overwrite_cache,
+        )
+        assert len(self.eval_dataset) != len(eval_dataset)
+        metrics = self.trainer.evaluate(
+            eval_dataset=self.eval_dataset,  # preprocessed
+            eval_examples=eval_dataset,  # unprocessed
+            ignore_keys=ignore_keys,
+        )
         metrics["eval_samples"] = len(self.eval_dataset)
 
         self.trainer.log_metrics("eval", metrics)
         self.trainer.save_metrics("eval", metrics)
+
+    def predict(self, predict_dataset, ignore_keys=None):
+        logger.info("*** Predict ***")
+        self.mode = "predict"
+        self.predict_dataset = predict_dataset
+        self.predict_dataset = self.predict_dataset.map(
+            self.prepare_validation_features,
+            batched=True,
+            remove_columns=predict_dataset.column_names,
+            load_from_cache_file=not self.config.utils.overwrite_cache,
+        )
+        self.trainer.predict(
+            predict_dataset=self.predict_dataset,
+            predict_examples=predict_dataset,
+            ignore_keys=ignore_keys,
+        )
 
     def prepare_train_features(self, examples):
         """
@@ -158,7 +170,10 @@ class MRC:
 
     def prepare_validation_features(self, examples):
         pad_on_right = self.tokenizer.padding_side == "right"
-        column_names = self.eval_dataset.column_names
+        if self.mode == "eval":
+            column_names = self.eval_dataset.column_names
+        elif self.mode == "predict":
+            column_names = self.predict_dataset.column_names
         question_column_name = "question" if "question" in column_names else column_names[0]
         context_column_name = "context" if "context" in column_names else column_names[1]
 
@@ -191,23 +206,42 @@ class MRC:
         """
         Evaluation/Prediction에서 start logits과 end logits을 original context의 정답과 match하는 함수
         """
-        predictions = postprocess_qa_predictions(
-            examples=examples,
-            features=features,
-            predictions=predictions,
-            max_answer_length=self.config.utils.max_answer_length,
-            output_dir=self.training_args.output_dir,
-        )
+        args = self.config.retriever
+        if args.type == "sparse":
+            prefix = f"tfidf{args.sparse.tfidf_num_features}"
+            if args.sparse.lsa:
+                prefix += f"_lsa{args.sparse.lsa_num_features}"
+            if args.faiss.use_faiss:
+                prefix += f"_faiss{args.faiss.num_clusters}_{args.faiss.metric}"
+
+            predictions = postprocess_qa_predictions(
+                examples=examples,
+                features=features,
+                predictions=predictions,
+                max_answer_length=self.config.utils.max_answer_length,
+                output_dir=self.training_args.output_dir,
+                prefix=prefix,
+            )
+        elif args.type == "dense" or "hybrid":
+            predictions = postprocess_qa_predictions(
+                examples=examples,
+                features=features,
+                predictions=predictions,
+                max_answer_length=self.config.utils.max_answer_length,
+                output_dir=self.training_args.output_dir,
+                prefix=None,
+            )
         # Metric을 구할 수 있도록 Format을 맞춰줍니다.
         formatted_predictions = [{"id": k, "prediction_text": v} for k, v in predictions.items()]
-        if self.predict_dataset:
-            return formatted_predictions
 
-        elif self.eval_dataset:
-            column_names = self.eval_dataset.column_names
+        if self.mode == "eval":
+            column_names = examples.column_names
             answer_column_name = "answers" if "answers" in column_names else column_names[2]
-            references = [{"id": example["id"], "answers": example[answer_column_name]} for example in self.eval_dataset_originl]
+            references = [{"id": example["id"], "answers": example[answer_column_name]} for example in examples]
             return EvalPrediction(predictions=formatted_predictions, label_ids=references)
+
+        elif self.mode == "predict":
+            return formatted_predictions
 
     def compute_metrics(self, p: EvalPrediction):
         metric = load_metric("squad")
