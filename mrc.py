@@ -9,6 +9,8 @@ from transformers import AutoModelForQuestionAnswering, AutoTokenizer, DataColla
 
 from utils.trainer_qa import QuestionAnsweringTrainer
 from utils.utils_qa import check_sanity, postprocess_qa_predictions
+from datasets import disable_caching
+disable_caching()
 
 logger = logging.getLogger(__name__)
 
