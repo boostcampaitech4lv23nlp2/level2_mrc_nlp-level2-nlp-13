@@ -85,6 +85,6 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", "-c", type=str, default="base_config")
+    parser.add_argument("--config", "-c", type=str, default="custom_config")
     args, _ = parser.parse_known_args()
     main(args)
