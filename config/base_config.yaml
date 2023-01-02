@@ -1,8 +1,8 @@
 path:
-  train: ./data/train_dataset
-  predict: ./data/test_dataset
-  data: ./data/
-  context: ./data/wikipedia_documents.json
+  train: ../data/train_dataset
+  predict: ../data/test_dataset
+  data: ../data/
+  context: ../data/wikipedia_documents.json
   resume: 
 
 model:
