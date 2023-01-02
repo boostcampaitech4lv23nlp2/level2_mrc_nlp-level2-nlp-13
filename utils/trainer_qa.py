@@ -28,11 +28,17 @@ if is_torch_tpu_available():
 
 # Huggingface의 Trainer를 상속받아 QuestionAnswering을 위한 Trainer를 생성합니다.
 class QuestionAnsweringTrainer(Trainer):
-    def __init__(self, *args, post_process_function=None, **kwargs):
+    def __init__(self, *args, post_process_function=None, eval_examples=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.post_process_function = post_process_function
+        self.eval_dataset = kwargs.pop("eval_dataset", None)
+        self.eval_examples = eval_examples
 
     def evaluate(self, eval_dataset, eval_examples, ignore_keys=None):
+        if eval_dataset is None:
+            eval_dataset = self.eval_dataset
+        if eval_examples is None:
+            eval_examples = self.eval_examples
         eval_dataloader = self.get_eval_dataloader(eval_dataset)
 
         # 일시적으로 metric computation를 불가능하게 한 상태이며, 해당 코드에서는 loop 내에서 metric 계산을 수행합니다.
