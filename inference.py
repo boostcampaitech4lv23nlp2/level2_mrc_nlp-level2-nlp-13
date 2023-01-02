@@ -95,10 +95,10 @@ def run_sparse_retrieval(
         tokenize_fn=tokenize_fn,
         config=config,
     )
-    if config.retriever.sparse.embedding_type == "tfidf":
+    if config.sparse.embedding_type == "tfidf":
         retriever.get_sparse_embedding()
         retriever.build_faiss()
-    if config.retriever.faiss.use_faiss:
+    if config.faiss.use_faiss:
         df = retriever.retrieve_faiss(datasets["validation"])
     else:
         df = retriever.retrieve(datasets["validation"])

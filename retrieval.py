@@ -200,9 +200,10 @@ class SparseRetrieval:
             Passage 파일을 불러오고 TfidfVectorizer를 선언하는 기능을 합니다.
         """
 
-        self.data_path = config.path.data
-        context_path = config.path.context
-        self.type = args.embedding_type
+        self.config = config
+        self.data_path = self.config.path.data
+        context_path = self.config.path.context
+        self.type = self.config.sparse.embedding_type
         with open(context_path, "r", encoding="utf-8") as f:
             wiki = json.load(f)
 
@@ -218,26 +219,26 @@ class SparseRetrieval:
 
         elif self.type == "tfidf":
             # Transform by vectorizer
-            self.tfidf_num_features = config.sparse.tfidf_num_features
+            self.tfidf_num_features = self.config.sparse.tfidf_num_features
             self.tfidf_vectorizer = TfidfVectorizer(
                 tokenizer=self.tokenize,
                 ngram_range=(1, 2),
                 max_features=self.tfidf_num_features,
             )
-            self.apply_lsa = config.sparse.lsa
+            self.apply_lsa = self.config.sparse.lsa
             self.lsa_vectorizer = None
-            self.n_lsa_features = config.sparse.lsa_num_features
+            self.n_lsa_features = self.config.sparse.lsa_num_features
             if self.apply_lsa is True:
                 self.lsa_vectorizer = TruncatedSVD(
-                    n_components=config.sparse.lsa_num_features,
+                    n_components=self.config.sparse.lsa_num_features,
                     algorithm="arpack",
                 )
 
         self.p_embedding = None  # get_sparse_embedding()로 생성합니다
         self.indexer = None  # build_faiss()로 생성합니다.
-        self.metric = config.faiss.metric
-        self.num_clusters = config.faiss.num_clusters
-        self.topk = config.retriever.topk
+        self.metric = self.config.faiss.metric
+        self.num_clusters = self.config.faiss.num_clusters
+        self.topk = self.config.retriever.topk
 
     def get_sparse_embedding(self) -> None:
 
@@ -447,7 +448,7 @@ class SparseRetrieval:
             doc_scores = []
             doc_indices = []
 
-            for query in tqdm(queries, total=len(queries)):
+            for query in tqdm(queries, total=len(queries), desc="BM25 get scores"):
                 tokenized_query = self.tokenize(query)
 
                 scores = self.bm25.get_scores(tokenized_query)
@@ -711,7 +712,7 @@ if __name__ == "__main__":
     from transformers import AutoTokenizer
 
     if config.retriever.type == "sparse":
-        tokenizer = AutoTokenizer.from_pretrained(config.model.name, use_fast=True)
+        tokenizer = AutoTokenizer.from_pretrained(config.model.name_or_path, use_fast=True)
         retriever = SparseRetrieval(tokenize_fn=tokenizer.tokenize, config=config)
 
     elif config.retriever.type == "dense":
