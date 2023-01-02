@@ -9,8 +9,8 @@ import argparse
 import os
 import sys
 import pytz
-from typing import Callable, Dict, List, NoReturn, Tuple
-from datasets import Dataset, DatasetDict, Features, Sequence, Value, load_from_disk, load_metric
+from typing import Callable, List
+from datasets import Dataset, DatasetDict, Features, Value, load_from_disk
 from omegaconf import OmegaConf, dictconfig
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer, TrainingArguments, set_seed
 
