@@ -28,14 +28,14 @@ def main(args):
     wandb.init(
         entity=config.wandb.team,
         project=config.wandb.project,
-        group=config.model.name,
+        group=config.model.name_or_path,
         id=run_id,
         tags=config.wandb.tags,
     )
 
     config.train.update(config.optimizer)
     if config.train.output_dir is None:
-        config.train.output_dir = os.path.join("saved_models", config.model.name, run_id)
+        config.train.output_dir = os.path.join("saved_models", config.model.name_or_path, run_id)
     training_args = TrainingArguments(**config.train)
     training_args.report_to = ["wandb"]
 
@@ -55,28 +55,28 @@ def main(args):
     datasets = load_from_disk(config.path.train)
 
     tokenizer = AutoTokenizer.from_pretrained(
-        config.model.name,
-        from_tf=bool(".ckpt" in config.model.name),
+        config.model.name_or_path,
+        from_tf=bool(".ckpt" in config.model.name_or_path),
         use_fast=True,
     )
     model = AutoModelForQuestionAnswering.from_pretrained(
-        config.model.name,
-        from_tf=bool(".ckpt" in config.model.name),
+        config.model.name_or_path,
+        from_tf=bool(".ckpt" in config.model.name_or_path),
     )
 
     reader = MRC(
-        config,
-        training_args,
-        tokenizer,
-        model,
-        datasets["train"],
+        config=config,
+        training_args=training_args,
+        tokenizer=tokenizer,
+        model=model,
+        datasets=datasets,
     )
     if config['hyper_parameter_search'] is True:
         best_run = reader.trainer.hyperparameter_search(
         n_trials=3, direction="maximize")
     else:
         reader.train(checkpoint=config.path.resume)
-        reader.evaluate(datasets["validation"])
+        reader.evaluate()
 
     # share the pretrained model to huggingface hub
     if config.hf_hub.push_to_hub is True:

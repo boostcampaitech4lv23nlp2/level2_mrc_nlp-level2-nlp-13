@@ -1,24 +1,12 @@
 path:
-  train: ./data/train_dataset
-  predict: ./data/test_dataset
-  data: ./data/
-  context: ./data/wikipedia_documents.json
+  train: ../data/train_dataset
+  predict: ../data/test_dataset
+  data: ../data/
+  context: ../data/wikipedia_documents.json
   resume: 
 
-retriever:
-  type: sparse # sparse or dense
-  topk: 10
-  sparse:
-    tfidf_num_features: 50000 # default: 50000. max_num_features for tfidf vectorizer
-    lsa: False # apply LSA or not
-    lsa_num_features: 1024 # default: 100.
-  faiss:
-    use_faiss: False # default: False
-    num_clusters: 64 # default: 64. The number of clusters
-    metric: inner_product # default: inner_product . l2 or inner_product available.
-
 model:
-  name: klue/roberta-base 
+  name_or_path: klue/roberta-base 
 
 tokenizer:
   max_length: 384
@@ -44,14 +32,23 @@ train:
   save_total_limit: 1 # default 1: save the last and the best
   load_best_model_at_end: False 
 
-DPR: 
+retriever:
+  type: sparse # sparse, dense or hybrid
+  topk: 10
+
+sparse:
+  tfidf_num_features: 50000 # default: 50000. max_num_features for tfidf vectorizer
+  lsa: False # apply LSA or not
+  lsa_num_features: 1024 # default: 100.
+
+dense: 
   path:
     train: ./data/train_dataset/train
     valid:  ./data/wikipedia_documents.json
     predict: 
 
   model:
-    name: klue/bert-base
+    name_or_path: klue/bert-base
     best_p_encoder_path: "saved_models/DPR/encoder/p_encoder_best_top_30" 
     best_q_encoder_path: "saved_models/DPR/encoder/q_encoder_best_top_30"
     saved_p_embs_epoch: 19 # 사용할 saved p_embs epoch (inference 시 사용)
@@ -73,6 +70,11 @@ DPR:
 
   utils:
     valid_analysis: False # train epoch마다 validation 결과를 csv로 저장할지 여부
+
+faiss:
+  use_faiss: False # default: False
+  num_clusters: 64 # default: 64. The number of clusters
+  metric: inner_product # default: inner_product . l2 or inner_product available.
 
 utils:
   seed: 42

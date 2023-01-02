@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import pickle
+import sys
 import warnings
 
 import numpy as np
@@ -30,6 +31,22 @@ class DenseRetrievalTrainer:
         with open("./data/wikipedia_documents.json", "r") as f:
             wiki = json.load(f)
         self.wiki_contexts = list(dict.fromkeys(w["text"] for w in wiki.values()))
+
+        # logging 설정
+        if not os.path.exists("./logs"):
+            os.makedirs("./logs")
+            with open("./logs/DPR_logs.log", "w+") as f:
+                f.write("***** Log file Start *****\n")
+        LOG_FORMAT = "%(asctime)s - %(message)s"
+        logging.basicConfig(
+            level=logging.INFO,
+            format=LOG_FORMAT,
+            datefmt="%m/%d/%Y %H:%M:%S",
+            handlers=[logging.StreamHandler(sys.stdout)],
+        )
+        file_handler = logging.FileHandler("./logs/DPR_logs.log", mode="a", encoding="utf-8")
+        file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+        logger.addHandler(file_handler)
 
     def configure_optimizers(self, optimizer_grouped_parameters, config):
         if config.DPR.optimizer.name == "AdamW":
@@ -108,7 +125,7 @@ class DenseRetrievalTrainer:
             pickle.dump(p_embs, f)
 
         # Question Embeddig 생성
-        top_10, top_20, top_30 = 0, 0, 0
+        top_10, top_20, top_30, top_50, top_100 = 0, 0, 0, 0, 0
 
         valid_data = load_from_disk("./data/train_dataset/validation")
         valid_question = valid_data["question"]
@@ -138,6 +155,8 @@ class DenseRetrievalTrainer:
                 top_10_passages = [self.wiki_contexts[i] for i in rank[:10]]
                 top_20_passages = [self.wiki_contexts[i] for i in rank[:20]]
                 top_30_passages = [self.wiki_contexts[i] for i in rank[:30]]
+                top_50_passages = [self.wiki_contexts[i] for i in rank[:50]]
+                top_100_passages = [self.wiki_contexts[i] for i in rank[:100]]
 
                 # top_k Accuracy 계산
                 if valid_context[idx] in top_10_passages:
@@ -165,6 +184,10 @@ class DenseRetrievalTrainer:
                     top_20 += 1
                 if valid_context[idx] in top_30_passages:
                     top_30 += 1
+                if valid_context[idx] in top_50_passages:
+                    top_50 += 1
+                if valid_context[idx] in top_100_passages:
+                    top_100 += 1
 
         if self.config.DPR.utils.valid_analysis:
             if not os.path.exists("./results/DPR/"):
@@ -174,6 +197,8 @@ class DenseRetrievalTrainer:
             top_10 / len(valid_question) * 100,
             top_20 / len(valid_question) * 100,
             top_30 / len(valid_question) * 100,
+            top_50 / len(valid_question) * 100,
+            top_100 / len(valid_question) * 100,
         )
 
     def train(self):
@@ -185,7 +210,7 @@ class DenseRetrievalTrainer:
         train_dataloader = DataLoader(self.train_dataset, sampler=train_sampler, batch_size=self.args.per_device_train_batch_size, drop_last=True)
         valid_dataloader = DataLoader(self.valid_dataset, batch_size=self.args.per_device_eval_batch_size)
 
-        best_top_10, best_top_20, best_top_30 = 0, 0, 0
+        best_top_10, best_top_20, best_top_30, best_top_50, best_top_100 = 0, 0, 0, 0, 0
 
         # Optimizer
         no_decay = ["bias", "LayerNorm.weight"]
@@ -223,14 +248,14 @@ class DenseRetrievalTrainer:
             train_loss = self.train_per_epoch(epoch_iterator, optimizer, scheduler)
 
             # valid per epoch
-            top_10_acc, top_20_acc, top_30_acc = self.valid_per_epoch(valid_dataloader, epoch)
+            top_10_acc, top_20_acc, top_30_acc, top_50_acc, top_100_acc = self.valid_per_epoch(valid_dataloader, epoch)
 
             logger.info("***** Validation Result *****")
             logger.info(
-                f"epoch: {epoch} | train loss: {train_loss:.4f} | top_10_acc: {top_10_acc:.2f} | top_20_acc: {top_20_acc:.2f} | top_30_acc: {top_30_acc:.2f} "
+                f"epoch: {epoch} | train loss: {train_loss:.4f} | top_10_acc: {top_10_acc:.2f} | top_20_acc: {top_20_acc:.2f} | top_30_acc: {top_30_acc:.2f} | top_50_acc: {top_50_acc:.2f} | top_100_acc: {top_100_acc:.2f} "
             )
             print(
-                f"epoch: {epoch} | train loss: {train_loss:.4f} | top_10_acc: {top_10_acc:.2f} | top_20_acc: {top_20_acc:.2f} | top_30_acc: {top_30_acc:.2f} "
+                f"epoch: {epoch} | train loss: {train_loss:.4f} | top_10_acc: {top_10_acc:.2f} | top_20_acc: {top_20_acc:.2f} | top_30_acc: {top_30_acc:.2f} | top_50_acc: {top_50_acc:.2f} | top_100_acc: {top_100_acc:.2f} "
             )
 
             scheduler.step()
@@ -248,3 +273,11 @@ class DenseRetrievalTrainer:
                 best_top_30 = top_30_acc
                 self.q_encoder.save_pretrained("./saved_models/DPR/encoder/q_encoder_best_top_30")
                 self.p_encoder.save_pretrained("./saved_models/DPR/encoder/p_encoder_best_top_30")
+            if top_50_acc > best_top_50:
+                best_top_50 = top_50_acc
+                self.q_encoder.save_pretrained("./saved_models/DPR/encoder/q_encoder_best_top_50")
+                self.p_encoder.save_pretrained("./saved_models/DPR/encoder/p_encoder_best_top_50")
+            if top_100_acc > best_top_100:
+                best_top_100 = top_100_acc
+                self.q_encoder.save_pretrained("./saved_models/DPR/encoder/q_encoder_best_top_100")
+                self.p_encoder.save_pretrained("./saved_models/DPR/encoder/p_encoder_best_top_100")

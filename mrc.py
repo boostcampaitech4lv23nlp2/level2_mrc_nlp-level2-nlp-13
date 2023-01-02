@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Union
 
 import omegaconf
-from datasets import Dataset, load_metric
+from datasets import Dataset, DatasetDict, load_metric
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer, DataCollatorWithPadding, EvalPrediction, TrainingArguments
 
 from utils.trainer_qa import QuestionAnsweringTrainer
@@ -21,23 +21,29 @@ class MRC:
     training_args: TrainingArguments
     tokenizer: AutoTokenizer
     model: AutoModelForQuestionAnswering
-    train_dataset: Optional[DatasetDict] = None
-    eval_dataset: Optional[DatasetDict] = None
-    test_dataset: Optional[DatasetDict] = None
-
-    #check_sanity(config, tokenizer)
-    # checkpoint = get_last_checkpoint
+    datasets: Optional[DatasetDict] = None
 
     def __post_init__(self):
         check_sanity(self.config, self.tokenizer)
-
-        if self.train_dataset is not None:
+        if self.datasets is not None:
+            self.mode = "train"
+            self.train_dataset = self.datasets["train"]
             self.train_dataset = self.train_dataset.map(
                 self.prepare_train_features,
                 batched=True,  # default batch_size = 1000
                 remove_columns=self.train_dataset.column_names,
                 load_from_cache_file=not self.config.utils.overwrite_cache,
             )
+            self.eval_examples = self.datasets["validation"]
+            self.eval_dataset = self.eval_examples.map(
+                self.prepare_validation_features,
+                batched=True,
+                remove_columns=self.eval_examples.column_names,
+                load_from_cache_file=not self.config.utils.overwrite_cache,
+            )
+            assert len(self.eval_dataset) != len(self.eval_examples)
+        else:
+            self.mode = "predict"
 
         # Data collator
         # flag가 True이면 이미 max length로 padding된 상태입니다.
@@ -45,15 +51,28 @@ class MRC:
         data_collator = DataCollatorWithPadding(self.tokenizer, pad_to_multiple_of=8 if self.config.train.fp16 else None)
 
         # Trainer 초기화
-        self.trainer = QuestionAnsweringTrainer(
-            model=self.model,
-            args=self.training_args,
-            train_dataset=self.train_dataset,
-            tokenizer=self.tokenizer,
-            data_collator=data_collator,
-            post_process_function=self.post_processing_function,
-            compute_metrics=self.compute_metrics,
-        )
+        if self.mode == "train":
+            self.trainer = QuestionAnsweringTrainer(
+                model=self.model,
+                args=self.training_args,
+                train_dataset=self.train_dataset,
+                eval_dataset=self.eval_dataset,
+                eval_examples=self.eval_examples,
+                tokenizer=self.tokenizer,
+                data_collator=data_collator,
+                post_process_function=self.post_processing_function,
+                compute_metrics=self.compute_metrics,
+            )
+        else:
+            # inference
+            self.trainer = QuestionAnsweringTrainer(
+                model=self.model,
+                args=self.training_args,
+                tokenizer=self.tokenizer,
+                data_collator=data_collator,
+                post_process_function=self.post_processing_function,
+                compute_metrics=self.compute_metrics,
+            )
 
     def train(self, checkpoint=None):
         train_result = self.trainer.train(resume_from_checkpoint=checkpoint)
@@ -77,20 +96,11 @@ class MRC:
         # State 저장
         self.trainer.state.save_to_json(os.path.join(self.training_args.output_dir, "trainer_state.json"))
 
-    def evaluate(self, eval_dataset, ignore_keys=None):
+    def evaluate(self, eval_dataset=None, eval_examples=None, ignore_keys=None):
         logger.info("*** Evaluate ***")
-        self.mode = "eval"
-        self.eval_dataset = eval_dataset
-        self.eval_dataset = self.eval_dataset.map(
-            self.prepare_validation_features,
-            batched=True,
-            remove_columns=eval_dataset.column_names,
-            load_from_cache_file=not self.config.utils.overwrite_cache,
-        )
-        assert len(self.eval_dataset) != len(eval_dataset)
         metrics = self.trainer.evaluate(
-            eval_dataset=self.eval_dataset,  # preprocessed
-            eval_examples=eval_dataset,  # unprocessed
+            eval_dataset=eval_dataset,  # prepocessed
+            eval_examples=eval_examples,  # unpreprocessed
             ignore_keys=ignore_keys,
         )
         metrics["eval_samples"] = len(self.eval_dataset)
@@ -178,8 +188,8 @@ class MRC:
 
     def prepare_validation_features(self, examples):
         pad_on_right = self.tokenizer.padding_side == "right"
-        if self.mode == "eval":
-            column_names = self.eval_dataset.column_names
+        if self.mode == "train":
+            column_names = self.eval_examples.column_names
         elif self.mode == "predict":
             column_names = self.predict_dataset.column_names
         question_column_name = "question" if "question" in column_names else column_names[0]
@@ -214,13 +224,13 @@ class MRC:
         """
         Evaluation/Prediction에서 start logits과 end logits을 original context의 정답과 match하는 함수
         """
-        args = self.config.retriever
-        if args.type == "sparse":
-            prefix = f"tfidf{args.sparse.tfidf_num_features}"
-            if args.sparse.lsa:
-                prefix += f"_lsa{args.sparse.lsa_num_features}"
-            if args.faiss.use_faiss:
-                prefix += f"_faiss{args.faiss.num_clusters}_{args.faiss.metric}"
+        if self.config.retriever.type == "sparse":
+            args = self.config.sparse
+            prefix = f"tfidf{args.tfidf_num_features}"
+            if args.lsa:
+                prefix += f"_lsa{args.lsa_num_features}"
+            if self.config.faiss.use_faiss:
+                prefix += f"_faiss{self.config.faiss.num_clusters}_{self.config.faiss.metric}"
 
             predictions = postprocess_qa_predictions(
                 examples=examples,
@@ -230,7 +240,7 @@ class MRC:
                 output_dir=self.training_args.output_dir,
                 prefix=prefix,
             )
-        elif args.type == "dense":
+        elif self.config.retriever.type == "dense" or "hybrid":
             predictions = postprocess_qa_predictions(
                 examples=examples,
                 features=features,
@@ -242,7 +252,7 @@ class MRC:
         # Metric을 구할 수 있도록 Format을 맞춰줍니다.
         formatted_predictions = [{"id": k, "prediction_text": v} for k, v in predictions.items()]
 
-        if self.mode == "eval":
+        if self.mode == "train":
             column_names = examples.column_names
             answer_column_name = "answers" if "answers" in column_names else column_names[2]
             references = [{"id": example["id"], "answers": example[answer_column_name]} for example in examples]

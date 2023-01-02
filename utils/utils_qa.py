@@ -300,8 +300,8 @@ def check_sanity(
         )
         config.tokenizer.max_length = tokenizer.model_max_length
 
-    if "roberta" in config.model.name and config.tokenizer.return_token_type_ids == True:
+    if "roberta" in config.model.name_or_path and config.tokenizer.return_token_type_ids == True:
         raise ValueError("Roberta models do not require token_type_ids")
 
-    elif "roberta" not in config.model.name and config.tokenizer.return_token_type_ids == False:
-        raise ValueError(f"{config.model.name} requires token_type_ids=True")
+    elif "roberta" not in config.model.name_or_path and config.tokenizer.return_token_type_ids == False:
+        raise ValueError(f"{config.model.name_or_path} requires token_type_ids=True")
