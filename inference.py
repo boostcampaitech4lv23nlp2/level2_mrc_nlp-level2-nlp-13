@@ -8,16 +8,14 @@ import datetime
 import logging
 import os
 import sys
-from typing import Callable, Dict, List, NoReturn, Tuple
+from typing import Callable, List
 
-import numpy as np
 import pytz
-from datasets import Dataset, DatasetDict, Features, Sequence, Value, load_from_disk, load_metric
-from omegaconf import OmegaConf, dictconfig
-from transformers import AutoModelForQuestionAnswering, AutoTokenizer, TrainingArguments, set_seed
-
+from datasets import Dataset, DatasetDict, Features, Value, load_from_disk
 from mrc import MRC
-from retrieval import DenseRetrieval, SparseRetrieval
+from omegaconf import OmegaConf, dictconfig
+from retrieval import DenseRetrieval, HybridRetrieval, SparseRetrieval
+from transformers import AutoModelForQuestionAnswering, AutoTokenizer, TrainingArguments, set_seed
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +25,7 @@ def main(args):
     config = OmegaConf.load(f"./config/{args.config}.yaml")
     now_time = datetime.datetime.now(pytz.timezone("Asia/Seoul")).strftime("%m-%d-%H-%M")
     if config.train.output_dir is None:
-        trained_model = config.model.name
+        trained_model = config.model.name_or_path
         if trained_model.startswith("./saved_models"):
             trained_model = trained_model.replace("./saved_models/", "")  # dropping "saved_models/" for sake of saving
         elif trained_model.startswith("saved_models"):
@@ -53,15 +51,15 @@ def main(args):
     print(datasets)
 
     tokenizer = AutoTokenizer.from_pretrained(
-        config.model.name,  # name_or_path
-        from_tf=bool(".ckpt" in config.model.name),
+        config.model.name_or_path,
+        from_tf=bool(".ckpt" in config.model.name_or_path),
         use_fast=True,
     )
     model = AutoModelForQuestionAnswering.from_pretrained(
-        config.model.name,
-        from_tf=bool(".ckpt" in config.model.name),
+        config.model.name_or_path,
+        from_tf=bool(".ckpt" in config.model.name_or_path),
     )
-    print(f"Get the pretrained model {config.model.name}")
+    print(f"Get the pretrained model {config.model.name_or_path}")
 
     reader = MRC(
         config,
@@ -79,6 +77,8 @@ def main(args):
         )
     elif config.retriever.type == "dense":
         datasets = run_dense_retrieval(datasets, config)
+    elif config.retriever.type == "hybrid":
+        datasets = run_hybrid_retrieval(tokenize_fn=tokenizer.tokenize, datasets=datasets, config=config)
 
     #### eval dataset & eval example - predictions.json 생성됨
     reader.predict(predict_dataset=datasets["validation"])
@@ -95,9 +95,10 @@ def run_sparse_retrieval(
         tokenize_fn=tokenize_fn,
         config=config,
     )
-    retriever.get_sparse_embedding()
-    retriever.build_faiss()
-    if config.retriever.faiss.use_faiss:
+    if config.sparse.embedding_type == "tfidf":
+        retriever.get_sparse_embedding()
+        retriever.build_faiss()
+    if config.faiss.use_faiss:
         df = retriever.retrieve_faiss(datasets["validation"])
     else:
         df = retriever.retrieve(datasets["validation"])
@@ -130,8 +131,23 @@ def run_dense_retrieval(datasets, config):
     return datasets
 
 
+def run_hybrid_retrieval(tokenize_fn, datasets, config):
+    retriever = HybridRetrieval(tokenize_fn, config)
+    df = retriever.retrieve(datasets["validation"])
+
+    f = Features(
+        {
+            "context": Value(dtype="string", id=None),
+            "id": Value(dtype="string", id=None),
+            "question": Value(dtype="string", id=None),
+        }
+    )
+    datasets = DatasetDict({"validation": Dataset.from_pandas(df, features=f)})
+    return datasets
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", "-c", type=str, default="base_config")
+    parser.add_argument("--config", "-c", type=str, default="custom_config")
     args, _ = parser.parse_known_args()
     main(args)

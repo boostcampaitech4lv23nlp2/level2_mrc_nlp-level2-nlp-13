@@ -11,16 +11,15 @@ import faiss
 import numpy as np
 import pandas as pd
 import torch
+from dataset.DPR_Dataset import DenseRetrievalDataset, DenseRetrievalValidDataset
 from datasets import Dataset, concatenate_datasets, load_from_disk
+from model.Retrieval.BertEncoder import BertEncoder
 from omegaconf import OmegaConf
+from rank_bm25 import BM25Okapi
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer
-
-from dataset.DPR_Dataset import (DenseRetrievalDataset,
-                                 DenseRetrievalValidDataset)
-from model.Retrieval.BertEncoder import BertEncoder
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -41,9 +40,9 @@ class DenseRetrieval:
         data_path: Optional[str] = "./data/wikipedia_documents.json",
     ):
         self.config = config
-        self.tokenizer = AutoTokenizer.from_pretrained(self.config.DPR.model.name)
-        self.p_encoder = BertEncoder.from_pretrained(self.config.DPR.model.best_p_encoder_path)
-        self.q_encoder = BertEncoder.from_pretrained(self.config.DPR.model.best_q_encoder_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.config.dense.model.name_or_path)
+        self.p_encoder = BertEncoder.from_pretrained(self.config.dense.model.best_p_encoder_path)
+        self.q_encoder = BertEncoder.from_pretrained(self.config.dense.model.best_q_encoder_path)
         self.passage_embedding_vectors = None  # get_dense_passage_embedding()에서 생성
 
         self.data_path = data_path
@@ -54,8 +53,8 @@ class DenseRetrieval:
 
     def get_dense_passage_embedding(self):
         logger.info("Get dense passage embedding")
-        if os.path.isfile(f"./saved_models/DPR/passage_embedding_vectors/p_embs_epoch_{self.config.DPR.model.saved_p_embs_epoch}.bin"):
-            with open(f"./saved_models/DPR/passage_embedding_vectors/p_embs_epoch_{self.config.DPR.model.saved_p_embs_epoch}.bin", "rb") as f:
+        if os.path.isfile(f"./saved_models/DPR/passage_embedding_vectors/p_embs_epoch_{self.config.dense.model.saved_p_embs_epoch}.bin"):
+            with open(f"./saved_models/DPR/passage_embedding_vectors/p_embs_epoch_{self.config.dense.model.saved_p_embs_epoch}.bin", "rb") as f:
                 self.passage_embedding_vectors = pickle.load(f)
             logger.info("Embedding pickle loaded")
 
@@ -65,14 +64,14 @@ class DenseRetrieval:
             p_seqs = self.tokenizer(
                 self.contexts,
                 padding="max_length",
-                max_length=self.config.DPR.tokenizer.max_context_length,
+                max_length=self.config.dense.tokenizer.max_context_length,
                 truncation=True,
                 return_tensors="pt",
             )
             # Dataset
-            p_dataset = DenseRetrievalValidDataset(self.data_path, self.config.DPR.tokenizer.max_context_length, self.tokenizer)
+            p_dataset = DenseRetrievalValidDataset(self.data_path, self.config.dense.tokenizer.max_context_length, self.tokenizer)
             # DataLoader
-            p_dataloader = torch.utils.data.DataLoader(p_dataset, batch_size=self.config.DPR.train.batch_size, shuffle=False, num_workers=4)
+            p_dataloader = torch.utils.data.DataLoader(p_dataset, batch_size=self.config.dense.train.batch_size, shuffle=False, num_workers=4)
             # Make passage embedding
             for item in tqdm(p_dataloader):
                 self.passage_embedding_vectors.extend(
@@ -141,7 +140,7 @@ class DenseRetrieval:
 
     def get_relevant_doc(self, query, topk):
         q_seqs = self.tokenizer(
-            [query], max_length=self.config.DPR.tokenizer.max_question_length, padding="max_length", truncation=True, return_tensors="pt"
+            [query], max_length=self.config.dense.tokenizer.max_question_length, padding="max_length", truncation=True, return_tensors="pt"
         )
         q_emb = self.q_encoder(**q_seqs)  # (1, 768)
 
@@ -156,7 +155,7 @@ class DenseRetrieval:
 
     def get_relevant_doc_bulk(self, queries, topk):
         q_seqs = self.tokenizer(
-            queries, max_length=self.config.DPR.tokenizer.max_question_length, padding="max_length", truncation=True, return_tensors="pt"
+            queries, max_length=self.config.dense.tokenizer.max_question_length, padding="max_length", truncation=True, return_tensors="pt"
         )
         q_dataset = DenseRetrievalDataset(
             input_ids=q_seqs["input_ids"], attention_mask=q_seqs["attention_mask"], token_type_ids=q_seqs["token_type_ids"]
@@ -201,9 +200,10 @@ class SparseRetrieval:
             Passage 파일을 불러오고 TfidfVectorizer를 선언하는 기능을 합니다.
         """
 
-        self.data_path = config.path.data
-        context_path = config.path.context
-        args = config.retriever.sparse
+        self.config = config
+        self.data_path = self.config.path.data
+        context_path = self.config.path.context
+        self.type = self.config.sparse.embedding_type
         with open(context_path, "r", encoding="utf-8") as f:
             wiki = json.load(f)
 
@@ -211,27 +211,34 @@ class SparseRetrieval:
         print(f"Lengths of unique contexts : {len(self.contexts)}")
         self.ids = list(range(len(self.contexts)))
 
-        # Transform by vectorizer
-        self.tfidf_num_features = args.tfidf_num_features
-        self.tfidf_vectorizer = TfidfVectorizer(
-            tokenizer=tokenize_fn,
-            ngram_range=(1, 2),
-            max_features=self.tfidf_num_features,
-        )
-        self.apply_lsa = args.lsa
-        self.lsa_vectorizer = None
-        self.n_lsa_features = args.lsa_num_features
-        if self.apply_lsa is True:
-            self.lsa_vectorizer = TruncatedSVD(
-                n_components=args.lsa_num_features,
-                algorithm="arpack",
+        if self.type == "bm25":
+            # bm25 구성
+            self.tokenize = tokenize_fn
+            self.tokenized_corpus = [self.tokenize(doc) for doc in self.contexts]
+            self.bm25 = BM25Okapi(self.tokenized_corpus)
+
+        elif self.type == "tfidf":
+            # Transform by vectorizer
+            self.tfidf_num_features = self.config.sparse.tfidf_num_features
+            self.tfidf_vectorizer = TfidfVectorizer(
+                tokenizer=self.tokenize,
+                ngram_range=(1, 2),
+                max_features=self.tfidf_num_features,
             )
+            self.apply_lsa = self.config.sparse.lsa
+            self.lsa_vectorizer = None
+            self.n_lsa_features = self.config.sparse.lsa_num_features
+            if self.apply_lsa is True:
+                self.lsa_vectorizer = TruncatedSVD(
+                    n_components=self.config.sparse.lsa_num_features,
+                    algorithm="arpack",
+                )
 
         self.p_embedding = None  # get_sparse_embedding()로 생성합니다
         self.indexer = None  # build_faiss()로 생성합니다.
-        self.metric = config.retriever.faiss.metric
-        self.num_clusters = config.retriever.faiss.num_clusters
-        self.topk = config.retriever.topk
+        self.metric = self.config.faiss.metric
+        self.num_clusters = self.config.faiss.num_clusters
+        self.topk = self.config.retriever.topk
 
     def get_sparse_embedding(self) -> None:
 
@@ -344,10 +351,14 @@ class SparseRetrieval:
                 Ground Truth가 없는 Query (test) -> Retrieval한 Passage만 반환합니다.
         """
 
-        assert self.p_embedding is not None, "get_sparse_embedding() 메소드를 먼저 수행해줘야합니다."
+        if self.type == "tfidf":
+            assert self.p_embedding is not None, "get_sparse_embedding() 메소드를 먼저 수행해줘야합니다."
 
         if isinstance(query_or_dataset, str):
-            doc_scores, doc_indices = self.get_relevant_doc(query_or_dataset)
+            if self.type == "tfidf":
+                doc_scores, doc_indices = self.get_relevant_doc(query_or_dataset)
+            elif self.type == "bm25":
+                doc_scores, doc_indices = self.get_relevant_doc_bm25(query_or_dataset)
             print("[Search query]\n", query_or_dataset, "\n")
 
             for i in range(self.topk):
@@ -361,7 +372,10 @@ class SparseRetrieval:
             # Retrieve한 Passage를 pd.DataFrame으로 반환합니다.
             total = []
             with timer("query exhaustive search"):
-                doc_scores, doc_indices = self.get_relevant_doc_bulk(query_or_dataset["question"])
+                if self.type == "tfidf":
+                    doc_scores, doc_indices = self.get_relevant_doc_bulk(query_or_dataset["question"])
+                elif self.type == "bm25":
+                    doc_scores, doc_indices = self.get_relevant_doc_bm25(query_or_dataset["question"])
             for idx, example in enumerate(tqdm(query_or_dataset, desc="Sparse retrieval: ")):
                 tmp = {
                     # Query와 해당 id를 반환합니다.
@@ -427,6 +441,27 @@ class SparseRetrieval:
             sorted_result = np.argsort(result[i, :])[::-1]
             doc_scores.append(result[i, :][sorted_result].tolist()[: self.topk])
             doc_indices.append(sorted_result.tolist()[: self.topk])
+        return doc_scores, doc_indices
+
+    def get_relevant_doc_bm25(self, queries: list or str) -> Tuple[List, List]:
+        if isinstance(queries, list):
+            doc_scores = []
+            doc_indices = []
+
+            for query in tqdm(queries, total=len(queries), desc="BM25 get scores"):
+                tokenized_query = self.tokenize(query)
+
+                scores = self.bm25.get_scores(tokenized_query)
+                doc_indices.append(np.argsort(-scores)[: self.topk])
+                doc_scores.append(scores[np.argsort(-scores)[: self.topk]])
+
+        elif isinstance(queries, str):
+            tokenized_query = self.tokenize(queries)
+
+            scores = self.bm25.get_scores(tokenized_query)
+            doc_indices = np.argsort(-scores)[: self.topk]
+            doc_scores = scores[np.argsort(-scores)[: self.topk]]
+
         return doc_scores, doc_indices
 
     def retrieve_faiss(self, query_or_dataset: Union[str, Dataset]) -> Union[Tuple[List, List], pd.DataFrame]:
@@ -528,6 +563,108 @@ class SparseRetrieval:
         return D.tolist(), I.tolist()
 
 
+class HybridRetrieval:
+    """
+    Sparse Retrieval Score에 Dense Retrieval Score를 더해주어 Reranking 수행
+    """
+
+    def __init__(self, tokenize_fn, config, data_path: Optional[str] = "./data/wikipedia_documents.json"):
+        self.dense_retriever = DenseRetrieval(config)
+        self.sparse_retriever = SparseRetrieval(tokenize_fn=tokenize_fn, config=config)
+        self.topk = config.retriever.topk
+        self.config = config
+
+        self.data_path = data_path
+        with open(data_path, "r") as f:
+            wiki = json.load(f)
+        self.contexts = list(dict.fromkeys(w["text"] for w in wiki.values()))
+        self.ids = list(range(len(self.contexts)))
+
+    def get_dense_sim_score(self, query_or_dataset):
+        self.dense_retriever.get_dense_passage_embedding()
+
+        q_seqs = self.dense_retriever.tokenizer(
+            query_or_dataset["question"],
+            max_length=self.config.dense.tokenizer.max_question_length,
+            padding="max_length",
+            truncation=True,
+            return_tensors="pt",
+        )
+        q_dataset = DenseRetrievalDataset(
+            input_ids=q_seqs["input_ids"], attention_mask=q_seqs["attention_mask"], token_type_ids=q_seqs["token_type_ids"]
+        )
+        q_dataloader = torch.utils.data.DataLoader(q_dataset, batch_size=1)
+
+        dense_ids = []
+        dense_scores = []
+        for item in tqdm(q_dataloader):
+            q_embs = self.dense_retriever.q_encoder(input_ids=item[0], attention_mask=item[1], token_type_ids=item[2])
+            for q_emb in q_embs:
+                sim_scores = torch.matmul(q_emb, torch.transpose(self.dense_retriever.passage_embedding_vectors, 0, 1))
+                rank = torch.argsort(sim_scores, dim=0, descending=True)
+
+                dense_ids.append(rank[:300].tolist())
+                dense_scores.append(sim_scores[rank[:300]].tolist())
+        return dense_ids, dense_scores
+
+    def get_sparse_sim_score(self, query_or_dataset):
+        self.sparse_retriever.get_sparse_embedding()
+
+        query_vec = self.sparse_retriever.tfidf_vectorizer.transform(query_or_dataset["question"])
+        result = query_vec * self.sparse_retriever.p_embedding.T
+        if not isinstance(result, np.ndarray):
+            result = result.toarray()
+
+        sparse_ids = []
+        sparse_scores = []
+        for i in range(result.shape[0]):
+            sorted_result = np.argsort(result[i, :])[::-1]
+            sparse_scores.append(result[i, :][sorted_result].tolist()[:300])
+            sparse_ids.append(sorted_result.tolist()[:300])
+        return sparse_ids, sparse_scores
+
+    def rerank(self, query_or_dataset):
+        dense_ids, dense_scores = self.get_dense_sim_score(query_or_dataset)
+        sparse_ids, sparse_scores = self.get_sparse_sim_score(query_or_dataset)
+
+        hybrid_ids = []
+        hybrid_scores = []
+
+        for i in range(len(dense_ids)):
+            for j in range(len(dense_ids[i])):
+                if dense_ids[i][j] in sparse_ids[i]:
+                    sparse_scores[i][sparse_ids[i].index(dense_ids[i][j])] += dense_scores[i][j] * 0.01
+            sorted_result = np.argsort(sparse_scores[i])[::-1]
+            hybrid_scores.append(np.array(sparse_scores[i])[sorted_result].tolist()[: self.topk])
+            hybrid_ids.append(np.array(sparse_ids[i])[sorted_result].tolist()[: self.topk])
+
+        return hybrid_scores, hybrid_ids
+
+    def retrieve(self, query_or_dataset):
+
+        # Retrieve한 Passage를 pd.DataFrame으로 반환합니다.
+        total = []
+        with timer("query exhaustive search"):
+            doc_scores, doc_indices = self.rerank(query_or_dataset)
+
+        for idx, example in enumerate(tqdm(query_or_dataset, desc="Hybrid retrieval: ")):
+            tmp = {
+                # Query와 해당 id를 반환합니다.
+                "question": example["question"],
+                "id": example["id"],
+                # Retrieve한 Passage의 id, context를 반환합니다.
+                "context": " ".join([self.contexts[pid] for pid in doc_indices[idx]]),
+            }
+            if "context" in example.keys() and "answers" in example.keys():
+                # validation 데이터를 사용하면 ground_truth context와 answer도 반환합니다.
+                tmp["original_context"] = example["context"]
+                tmp["answers"] = example["answers"]
+            total.append(tmp)
+
+        cqas = pd.DataFrame(total)
+        return cqas
+
+
 if __name__ == "__main__":
 
     import argparse
@@ -574,18 +711,11 @@ if __name__ == "__main__":
 
     from transformers import AutoTokenizer
 
-    if config.retrieval.type == "sparse":
-        tokenizer = AutoTokenizer.from_pretrained(
-            args.model_name_or_path,
-            use_fast=False,
-        )
+    if config.retriever.type == "sparse":
+        tokenizer = AutoTokenizer.from_pretrained(config.model.name_or_path, use_fast=True)
+        retriever = SparseRetrieval(tokenize_fn=tokenizer.tokenize, config=config)
 
-        retriever = SparseRetrieval(
-            tokenize_fn=tokenizer.tokenize,
-            data_path=args.data_path,
-            context_path=args.context_path,
-        )
-    elif config.retrieval.type == "dense":
+    elif config.retriever.type == "dense":
         retriever = DenseRetrieval(config)
         retriever.get_dense_passage_embedding()
 
@@ -606,9 +736,9 @@ if __name__ == "__main__":
 
     else:
         with timer("bulk query by exhaustive search"):
-            df = retriever.retrieve(full_ds, topk=config.retrieval.topk)
+            df = retriever.retrieve(full_ds)  # 기존에 있던 topk 인자는 class 내에 self로 넣어줌
             df["correct"] = df["original_context"] == df["context"]
-            df.to_csv(".results.csv", index=False, encoding="utf-8")  # 💥
+            df.to_csv("retrieval_results.csv", index=False, encoding="utf-8")  # 💥
             print(
                 "correct retrieval result by exhaustive search",
                 df["correct"].sum() / len(df),
@@ -616,3 +746,11 @@ if __name__ == "__main__":
 
         with timer("single query by exhaustive search"):
             scores, indices = retriever.retrieve(query)
+
+    # tokenizer = AutoTokenizer.from_pretrained(
+    #     config.model.name,  # name_or_path
+    #     from_tf=bool(".ckpt" in config.model.name),
+    #     use_fast=True,
+    # )
+    # retriever = HybridRetrieval(tokenize_fn=tokenizer.tokenize, config=config)
+    # retriever.rerank(full_ds)

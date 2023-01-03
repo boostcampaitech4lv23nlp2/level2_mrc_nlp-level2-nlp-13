@@ -24,14 +24,14 @@ def main(config):
     wandb.init(
         entity=config.wandb.team,
         project=config.wandb.project,
-        group=config.model.name,
+        group=config.model.name_or_path,
         id=run_id,
         tags=config.wandb.tags,
     )
 
-    config.DPR.train.update(config.DPR.optimizer)
-    if config.DPR.train.output_dir is None:
-        config.DPR.train.output_dir = os.path.join("saved_models/DPR", config.DPR.model.name, run_id)
+    config.dense.train.update(config.dense.optimizer)
+    if config.dense.train.output_dir is None:
+        config.dense.train.output_dir = os.path.join("saved_models/DPR", config.dense.model.name_or_path, run_id)
 
     # logging 설정
     if not os.path.exists("./logs"):
@@ -56,41 +56,41 @@ def main(config):
     set_seed(config.utils.seed)
 
     # 토크나이저
-    tokenizer = AutoTokenizer.from_pretrained(config.DPR.model.name)
+    tokenizer = AutoTokenizer.from_pretrained(config.dense.model.name_or_path)
 
     # 데이터셋
     train_dataset = DenseRetrievalTrainDataset(
-        data_path=config.DPR.path.train,
-        max_context_length=config.DPR.tokenizer.max_context_length,
-        max_question_length=config.DPR.tokenizer.max_question_length,
+        data_path=config.dense.path.train,
+        max_context_length=config.dense.tokenizer.max_context_length,
+        max_question_length=config.dense.tokenizer.max_question_length,
         tokenizer=tokenizer,
         hard_negative=config.DPR.train.hard_negative,
     )
     valid_dataset = DenseRetrievalValidDataset(
-        data_path=config.DPR.path.valid,
-        max_context_length=config.DPR.tokenizer.max_context_length,
+        data_path=config.dense.path.valid,
+        max_context_length=config.dense.tokenizer.max_context_length,
         tokenizer=tokenizer,
     )
     logger.info(f"  train_dataset: {len(train_dataset)} | valid_dataset: {len(valid_dataset)}")
 
     # 모델
-    logger.info(f"  Encoder model: {config.DPR.model.name}")
-    p_encoder = BertEncoder.from_pretrained(config.DPR.model.name)
-    q_encoder = BertEncoder.from_pretrained(config.DPR.model.name)
+    logger.info(f"  Encoder model: {config.dense.model.name_or_path}")
+    p_encoder = BertEncoder.from_pretrained(config.dense.model.name_or_path)
+    q_encoder = BertEncoder.from_pretrained(config.dense.model.name_or_path)
     if torch.cuda.is_available():
         p_encoder.cuda()
         q_encoder.cuda()
 
     # 학습
     training_args = TrainingArguments(
-        output_dir=config.DPR.train.output_dir,
+        output_dir=config.dense.train.output_dir,
         evaluation_strategy="epoch",
-        learning_rate=config.DPR.optimizer.learning_rate,
-        per_device_train_batch_size=config.DPR.train.batch_size,
-        per_device_eval_batch_size=config.DPR.train.batch_size,
-        num_train_epochs=config.DPR.train.num_train_epochs,
-        weight_decay=config.DPR.optimizer.weight_decay,
-        gradient_accumulation_steps=config.DPR.optimizer.gradient_accumulation_steps,
+        learning_rate=config.dense.optimizer.learning_rate,
+        per_device_train_batch_size=config.dense.train.batch_size,
+        per_device_eval_batch_size=config.dense.train.batch_size,
+        num_train_epochs=config.dense.train.num_train_epochs,
+        weight_decay=config.dense.optimizer.weight_decay,
+        gradient_accumulation_steps=config.dense.optimizer.gradient_accumulation_steps,
     )
     training_args.report_to = ["wandb"]
 
