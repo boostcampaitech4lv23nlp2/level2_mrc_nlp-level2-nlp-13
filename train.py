@@ -30,6 +30,7 @@ def main(args):
         group=config.model.name_or_path,
         id=run_id,
         tags=config.wandb.tags,
+        config=config,
     )
     # update config for a sweep run
     if args.learning_rate is not None:
@@ -78,7 +79,13 @@ def main(args):
         datasets=datasets,
     )
     reader.train(checkpoint=config.path.resume)
-    reader.evaluate()
+    eval_metrics = reader.evaluate()
+    wandb.log(
+        {
+            "eval/exact_match": eval_metrics["exact_match"],
+            "eval/f1": eval_metrics["f1"],
+        }
+    )
 
     # share the pretrained model to huggingface hub
     if config.hf_hub.push_to_hub is True:

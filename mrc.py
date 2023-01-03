@@ -105,6 +105,7 @@ class MRC:
 
         self.trainer.log_metrics("eval", metrics)
         self.trainer.save_metrics("eval", metrics)
+        return metrics
 
     def predict(self, predict_dataset, ignore_keys=None):
         logger.info("*** Predict ***")
