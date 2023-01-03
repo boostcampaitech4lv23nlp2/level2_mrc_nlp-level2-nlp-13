@@ -15,7 +15,7 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
-
+from ray import tune
 logger = logging.getLogger(__name__)
 
 
@@ -31,6 +31,7 @@ def main(args):
         group=config.model.name_or_path,
         id=run_id,
         tags=config.wandb.tags,
+        config=config,
     )
 
     config.train.update(config.optimizer)
@@ -73,8 +74,20 @@ def main(args):
         model=model,
         datasets=datasets,
     )
-    reader.train(checkpoint=config.path.resume)
-    reader.evaluate()
+    if config['hyper_parameter_search'] is True:
+        def ray_hp_space(trial):
+            return {
+                "per_device_train_batch_size": tune.choice([8, 16]),
+                "learning_rate": tune.loguniform(5e-6, 5e-4),
+                "num_train_epochs": tune.choice(range(1, 2)),
+                "seed": tune.choice(range(1, 42)),
+                "warmup_steps":tune.choice(range(0, 500)),
+            }
+        best_run = reader.trainer.hyperparameter_search(n_trials=2, direction="maximize", hp_space=ray_hp_space, backend='ray')
+
+    else:
+        reader.train(checkpoint=config.path.resume)
+        eval_metrics = reader.evaluate()
 
     # share the pretrained model to huggingface hub
     if config.hf_hub.push_to_hub is True:

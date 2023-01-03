@@ -92,3 +92,5 @@ wandb:
 hf_hub:
   push_to_hub: False # whether to push to huggingface hub the pretrained model & tokenizer
   save_name: # name to register. e.g. nlpotato/roberta-base-new-model
+
+hyper_parameter_search: False
