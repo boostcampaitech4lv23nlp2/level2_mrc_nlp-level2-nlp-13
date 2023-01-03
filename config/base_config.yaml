@@ -37,6 +37,7 @@ retriever:
   topk: 10
 
 sparse:
+  embedding_type: bm25 # tfidf or bm25
   tfidf_num_features: 50000 # default: 50000. max_num_features for tfidf vectorizer
   lsa: False # apply LSA or not
   lsa_num_features: 1024 # default: 100.
