@@ -31,6 +31,7 @@ train:
   save_steps: 500
   save_total_limit: 1 # default 1: save the last and the best
   load_best_model_at_end: False 
+  per_device_train_batch_size: 16
 
 retriever:
   type: sparse # sparse, dense or hybrid
