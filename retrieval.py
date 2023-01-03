@@ -195,6 +195,7 @@ class SparseRetrieval:
                     tfidf 벡터 차원 크기
                 apply_lsa:
                     truncatedSVD를 이용해 추가로 tf-idf vectors에 LSA(latent semnatic analysis)를 적용할지 선택할 수 있습니다.
+
         Summary:
             Passage 파일을 불러오고 TfidfVectorizer를 선언하는 기능을 합니다.
         """
@@ -209,17 +210,10 @@ class SparseRetrieval:
         self.contexts = list(dict.fromkeys([v["text"] for v in wiki.values()]))  # set 은 매번 순서가 바뀌므로
         print(f"Lengths of unique contexts : {len(self.contexts)}")
         self.ids = list(range(len(self.contexts)))
-<<<<<<< HEAD
         self.tokenize = tokenize_fn
 
         if self.type == "bm25":
             # bm25 구성
-=======
-
-        if self.type == "bm25":
-            # bm25 구성
-            self.tokenize = tokenize_fn
->>>>>>> 3e5a22aedb479f0bda458c649b8fab62572b94c3
             self.tokenized_corpus = [self.tokenize(doc) for doc in self.contexts]
             self.bm25 = BM25Okapi(self.tokenized_corpus)
 
@@ -345,9 +339,11 @@ class SparseRetrieval:
                 str 형태인 하나의 query만 받으면 `get_relevant_doc`을 통해 유사도를 구합니다.
                 Dataset 형태는 query를 포함한 HF.Dataset을 받습니다.
                 이 경우 `get_relevant_doc_bulk`를 통해 유사도를 구합니다.
+
         Returns:
             1개의 Query를 받는 경우  -> Tuple(List, List)
             다수의 Query를 받는 경우 -> pd.DataFrame: [description]
+
         Note:
             다수의 Query를 받는 경우,
                 Ground Truth가 있는 Query (train/valid) -> 기존 Ground Truth Passage를 같이 반환합니다.
@@ -445,13 +441,9 @@ class SparseRetrieval:
             doc_indices.append(sorted_result.tolist()[: self.topk])
         return doc_scores, doc_indices
 
-<<<<<<< HEAD
+
     def get_relevant_doc_bm25(self, queries: List or str) -> Tuple[List, List]:
         if isinstance(queries, List):
-=======
-    def get_relevant_doc_bm25(self, queries: list or str) -> Tuple[List, List]:
-        if isinstance(queries, list):
->>>>>>> 3e5a22aedb479f0bda458c649b8fab62572b94c3
             doc_scores = []
             doc_indices = []
 
@@ -459,11 +451,7 @@ class SparseRetrieval:
                 tokenized_query = self.tokenize(query)
 
                 scores = self.bm25.get_scores(tokenized_query)
-<<<<<<< HEAD
                 doc_indices.append(list(np.argsort(-scores)[: self.topk])) # np가 아니라 list로 바꿔줘야함
-=======
-                doc_indices.append(np.argsort(-scores)[: self.topk])
->>>>>>> 3e5a22aedb479f0bda458c649b8fab62572b94c3
                 doc_scores.append(scores[np.argsort(-scores)[: self.topk]])
 
         elif isinstance(queries, str):
@@ -472,10 +460,6 @@ class SparseRetrieval:
             scores = self.bm25.get_scores(tokenized_query)
             doc_indices = np.argsort(-scores)[: self.topk]
             doc_scores = scores[np.argsort(-scores)[: self.topk]]
-<<<<<<< HEAD
-        
-=======
->>>>>>> 3e5a22aedb479f0bda458c649b8fab62572b94c3
 
         return doc_scores, doc_indices
 
@@ -491,6 +475,7 @@ class SparseRetrieval:
         Returns:
             1개의 Query를 받는 경우  -> Tuple(List, List)
             다수의 Query를 받는 경우 -> pd.DataFrame: [description]
+
         Note:
             다수의 Query를 받는 경우,
                 Ground Truth가 있는 Query (train/valid) -> 기존 Ground Truth Passage를 같이 반환합니다.
@@ -645,6 +630,7 @@ class HybridRetrieval:
         print("🤚")
         print(query_or_dataset)
         print("🤚🤚" + str(type(query_or_dataset)))
+
         dense_ids, dense_scores = self.get_dense_sim_score(query_or_dataset)
         sparse_ids, sparse_scores = self.get_sparse_sim_score(query_or_dataset)
 
@@ -775,3 +761,4 @@ if __name__ == "__main__":
     # )
     # retriever = HybridRetrieval(tokenize_fn=tokenizer.tokenize, config=config)
     # retriever.rerank(full_ds)
+

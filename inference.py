@@ -1,5 +1,6 @@
 """
 Open-Domain Question Answering 을 수행하는 inference 코드 입니다.
+
 대부분의 로직은 train.py 와 비슷하나 retrieval, predict 부분이 추가되어 있습니다.
 """
 import argparse
