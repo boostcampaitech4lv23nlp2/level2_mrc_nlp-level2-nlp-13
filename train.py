@@ -24,7 +24,7 @@ def main(args):
     config = OmegaConf.load(f"./config/{args.config}.yaml")
     # wandb 설정
     now_time = datetime.datetime.now(pytz.timezone("Asia/Seoul")).strftime("%m-%d-%H-%M")
-    run_id = f"mrc_{config.wandb.name}_{now_time}"
+    run_id = f"MRC_{config.wandb.name}_{now_time}"
     wandb.init(
         entity=config.wandb.team,
         project=config.wandb.project,
@@ -86,5 +86,9 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", "-c", type=str, default="custom_config")
+    parser.add_argument("--learning_rate", "-lr", type=float, required=False)
+    parser.add_argument("--epoch", type=int, required=False)
+    parser.add_argument("--batch_size", "-bs", type=int, required=False)
+    parser.add_argument("--weight_decay", "-wd", required=False)
     args, _ = parser.parse_known_args()
     main(args)
