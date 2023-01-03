@@ -9,6 +9,7 @@ from transformers import AutoModelForQuestionAnswering, AutoTokenizer, DataColla
 from utils.trainer_qa import QuestionAnsweringTrainer
 from utils.utils_qa import check_sanity, postprocess_qa_predictions
 from datasets import disable_caching
+from ray import tune
 disable_caching()
 
 logger = logging.getLogger(__name__)
@@ -55,32 +56,18 @@ class MRC:
             )
         # Trainer 초기화
         if self.mode == "train":
-            if self.config['hyper_parameter_search'] is True:
-                self.trainer = QuestionAnsweringTrainer(
-                    model_init=model_init,
-                    args=self.training_args,
-                    train_dataset=self.train_dataset,
-                    eval_dataset=self.eval_dataset,
-                    eval_examples=self.eval_examples,
-                    tokenizer=self.tokenizer,
-                    data_collator=data_collator,
-                    post_process_function=self.post_processing_function,
-                    compute_metrics=self.compute_metrics,
-                )
-                best_run = self.trainer.hyperparameter_search(n_trials=2, direction="maximize")  
-                
-            else:
-                self.trainer = QuestionAnsweringTrainer(
-                    model=self.model,
-                    args=self.training_args,
-                    train_dataset=self.train_dataset,
-                    eval_dataset=self.eval_dataset,
-                    eval_examples=self.eval_examples,
-                    tokenizer=self.tokenizer,
-                    data_collator=data_collator,
-                    post_process_function=self.post_processing_function,
-                    compute_metrics=self.compute_metrics,
-                )
+            self.trainer = QuestionAnsweringTrainer(
+                model_init=model_init,
+                model=self.model,
+                args=self.training_args,
+                train_dataset=self.train_dataset,
+                eval_dataset=self.eval_dataset,
+                eval_examples=self.eval_examples,
+                tokenizer=self.tokenizer,
+                data_collator=data_collator,
+                post_process_function=self.post_processing_function,
+                compute_metrics=self.compute_metrics,
+            )
                 
         else:
             # inference
