@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 
 def main(args):
-
     config = OmegaConf.load(f"./config/{args.config}.yaml")
     # wandb 설정
     now_time = datetime.datetime.now(pytz.timezone("Asia/Seoul")).strftime("%m-%d-%H-%M")
@@ -32,6 +31,13 @@ def main(args):
         id=run_id,
         tags=config.wandb.tags,
     )
+    # update config for a sweep run
+    if args.learning_rate is not None:
+        config.optimizer.learning_rate = args.learning_rate
+    if args.epoch is not None:
+        config.train.num_train_epochs = args.epoch
+    if args.batch_size is not None:
+        config.train.per_device_train_batch_size = args.batch_size
 
     config.train.update(config.optimizer)
     if config.train.output_dir is None:

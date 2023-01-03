@@ -181,8 +181,6 @@ data
 .vscode
 .git
 
-# Personal folder
-jihoon
 
 # WandB
 wandb/
@@ -197,6 +195,7 @@ save_models/
 saved_models/
 config/*
 !config/base_config.yaml
+!config/base_sweep.yaml
 outputs/
 
 *.csv

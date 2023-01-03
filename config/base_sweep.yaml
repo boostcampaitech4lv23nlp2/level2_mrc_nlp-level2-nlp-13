@@ -1,0 +1,12 @@
+program:  # train.py or train_dpr.py
+project: MRC-sweep
+name: 
+method: grid # supports grid only for now
+
+parameters:
+  learning_rate:
+    values: [1e-3, 1e-4]
+  epoch:
+    values: [1]
+  batch_size:
+    values: [8, 16]
