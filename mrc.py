@@ -6,7 +6,6 @@ from typing import Optional, Union
 import omegaconf
 from datasets import Dataset, DatasetDict, load_metric
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer, DataCollatorWithPadding, EvalPrediction, TrainingArguments
-
 from utils.trainer_qa import QuestionAnsweringTrainer
 from utils.utils_qa import check_sanity, postprocess_qa_predictions
 
