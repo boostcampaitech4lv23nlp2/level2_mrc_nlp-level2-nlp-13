@@ -34,7 +34,7 @@ class QuestionAnsweringTrainer(Trainer):
         self.eval_dataset = kwargs.pop("eval_dataset", None)
         self.eval_examples = eval_examples
 
-    def evaluate(self, eval_dataset, eval_examples, ignore_keys=None):
+    def evaluate(self, eval_dataset=None, eval_examples=None, ignore_keys=None):
         if eval_dataset is None:
             eval_dataset = self.eval_dataset
         if eval_examples is None:

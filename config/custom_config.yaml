@@ -1,12 +1,12 @@
 path:
-  train: ./data/train_dataset  #./data/origin_added_korquad/train #../data/train_dataset 
-  predict: ./data/test_dataset #./data/origin_added_korquad/validation #../data/test_dataset
-  data: ./data/
-  context: ./data/wikipedia_documents.json
+  train: /opt/ml/data/train_dataset # /opt/ml/data/origin_added_korquad #../data/origin_added_korquad #  ../data/korquad #  # #
+  predict: /opt/ml/data/test_dataset
+  data: /opt/ml/data/
+  context: /opt/ml/data/wikipedia_documents.json
   resume: 
 
 model:
-  name_or_path: klue/roberta-large #mrc 경로
+  name_or_path: klue/roberta-large
 
 tokenizer:
   max_length: 384
@@ -17,15 +17,15 @@ tokenizer:
 optimizer: # default AdamW
   learning_rate: 1e-5
   weight_decay: 0
-  adam_beta1: 0.5 # The beta1 hyperparameter for the AdamW optimizer.
-  adam_beta2: 0.5 # The beta2 hyperparameter for the AdamW optimizer.
+  adam_beta1: 0.9 # The beta1 hyperparameter for the AdamW optimizer.
+  adam_beta2: 0.999 # The beta2 hyperparameter for the AdamW optimizer.
   adam_epsilon: 1e-8 # The epsilon hyperparameter for the AdamW optimizer.
   lr_scheduler_type: linear
   warmup_ratio: 0.5
 
 train:
   output_dir: # default: saved_models/model/{wandb_name}_{time}
-  num_train_epochs: 20
+  num_train_epochs: 1
   fp16: False
   save_strategy : epoch # steps or epoch
   save_steps: 500
@@ -44,15 +44,15 @@ sparse:
 
 dense: 
   path:
-    train: ./data/train_dataset/train
-    valid:  ./data/wikipedia_documents.json
+    train: /opt/ml/data/train_dataset #../data/origin_added_korquad # # #../data/korquad #
+    valid:  /opt/ml/data/wikipedia_documents.json
     predict: 
 
   model:
     name_or_path: klue/roberta-large
-    best_p_encoder_path: "saved_models/DPR/encoder/p_encoder_best_top_50" 
-    best_q_encoder_path: "saved_models/DPR/encoder/q_encoder_best_top_50"
-    saved_p_embs_epoch: 27 # 사용할 saved p_embs epoch (inference 시 사용)
+    best_p_encoder_path: "saved_models/DPR/encoder/p_encoder_best_top_30" 
+    best_q_encoder_path: "saved_models/DPR/encoder/q_encoder_best_top_30"
+    saved_p_embs_epoch: 19 # 사용할 saved p_embs epoch (inference 시 사용)
 
   tokenizer:
     max_context_length: 512
@@ -85,10 +85,12 @@ utils:
 
 wandb:
   team: next-level-potato # team account name
-  project: MRC # project name
-  name: LJA # 실험자 명
-  tags: [] # tag
+  project: ray # project name
+  name: lsg # 실험자 명
+  tags: [ray] # tag
 
 hf_hub:
   push_to_hub: False # whether to push to huggingface hub the pretrained model & tokenizer
   save_name: # name to register. e.g. nlpotato/roberta-base-new-model
+
+hyper_parameter_search: True # False # 
