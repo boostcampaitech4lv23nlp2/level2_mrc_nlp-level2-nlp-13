@@ -210,10 +210,10 @@ class SparseRetrieval:
         self.contexts = list(dict.fromkeys([v["text"] for v in wiki.values()]))  # set 은 매번 순서가 바뀌므로
         print(f"Lengths of unique contexts : {len(self.contexts)}")
         self.ids = list(range(len(self.contexts)))
+        self.tokenize = tokenize_fn
 
         if self.type == "bm25":
             # bm25 구성
-            self.tokenize = tokenize_fn
             self.tokenized_corpus = [self.tokenize(doc) for doc in self.contexts]
             self.bm25 = BM25Okapi(self.tokenized_corpus)
 
@@ -297,7 +297,6 @@ class SparseRetrieval:
             속성으로 저장되어 있는 Passage Embedding을
             Faiss indexer에 fitting 시켜놓습니다.
             이렇게 저장된 indexer는 `get_relevant_doc`에서 유사도를 계산하는데 사용됩니다.
-
         Note:
             Faiss는 Build하는데 시간이 오래 걸리기 때문에,
             매번 새롭게 build하는 것은 비효율적입니다.
@@ -423,7 +422,6 @@ class SparseRetrieval:
         Arguments:
             queries (List):
                 하나의 Query를 받습니다.
-
         Note:
             vocab 에 없는 이상한 단어로 query 하는 경우 assertion 발생 (예) 뙣뙇?
         """
@@ -443,8 +441,9 @@ class SparseRetrieval:
             doc_indices.append(sorted_result.tolist()[: self.topk])
         return doc_scores, doc_indices
 
-    def get_relevant_doc_bm25(self, queries: list or str) -> Tuple[List, List]:
-        if isinstance(queries, list):
+
+    def get_relevant_doc_bm25(self, queries: List or str) -> Tuple[List, List]:
+        if isinstance(queries, List):
             doc_scores = []
             doc_indices = []
 
@@ -452,7 +451,7 @@ class SparseRetrieval:
                 tokenized_query = self.tokenize(query)
 
                 scores = self.bm25.get_scores(tokenized_query)
-                doc_indices.append(np.argsort(-scores)[: self.topk])
+                doc_indices.append(list(np.argsort(-scores)[: self.topk])) # np가 아니라 list로 바꿔줘야함
                 doc_scores.append(scores[np.argsort(-scores)[: self.topk]])
 
         elif isinstance(queries, str):
@@ -473,7 +472,6 @@ class SparseRetrieval:
                 str 형태인 하나의 query만 받으면 `get_relevant_doc`을 통해 유사도를 구합니다.
                 Dataset 형태는 query를 포함한 HF.Dataset을 받습니다.
                 이 경우 `get_relevant_doc_bulk`를 통해 유사도를 구합니다.
-
         Returns:
             1개의 Query를 받는 경우  -> Tuple(List, List)
             다수의 Query를 받는 경우 -> pd.DataFrame: [description]
@@ -608,22 +606,31 @@ class HybridRetrieval:
         return dense_ids, dense_scores
 
     def get_sparse_sim_score(self, query_or_dataset):
-        self.sparse_retriever.get_sparse_embedding()
+        if self.config.sparse.embedding_type == 'tfidf':
+            self.sparse_retriever.get_sparse_embedding()
 
-        query_vec = self.sparse_retriever.tfidf_vectorizer.transform(query_or_dataset["question"])
-        result = query_vec * self.sparse_retriever.p_embedding.T
-        if not isinstance(result, np.ndarray):
-            result = result.toarray()
+            query_vec = self.sparse_retriever.tfidf_vectorizer.transform(query_or_dataset["question"])
+            result = query_vec * self.sparse_retriever.p_embedding.T
+            if not isinstance(result, np.ndarray):
+                result = result.toarray()
 
-        sparse_ids = []
-        sparse_scores = []
-        for i in range(result.shape[0]):
-            sorted_result = np.argsort(result[i, :])[::-1]
-            sparse_scores.append(result[i, :][sorted_result].tolist()[:300])
-            sparse_ids.append(sorted_result.tolist()[:300])
+            sparse_ids = []
+            sparse_scores = []
+            for i in range(result.shape[0]):
+                sorted_result = np.argsort(result[i, :])[::-1]
+                sparse_scores.append(result[i, :][sorted_result].tolist()[:300])
+                sparse_ids.append(sorted_result.tolist()[:300])
+        
+        elif self.config.sparse.embedding_type == 'bm25':
+            sparse_scores, sparse_ids = self.sparse_retriever.get_relevant_doc_bm25(query_or_dataset["question"])
+            
         return sparse_ids, sparse_scores
 
     def rerank(self, query_or_dataset):
+        print("🤚")
+        print(query_or_dataset)
+        print("🤚🤚" + str(type(query_or_dataset)))
+
         dense_ids, dense_scores = self.get_dense_sim_score(query_or_dataset)
         sparse_ids, sparse_scores = self.get_sparse_sim_score(query_or_dataset)
 
@@ -754,3 +761,4 @@ if __name__ == "__main__":
     # )
     # retriever = HybridRetrieval(tokenize_fn=tokenizer.tokenize, config=config)
     # retriever.rerank(full_ds)
+
