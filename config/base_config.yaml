@@ -1,5 +1,5 @@
 path:
-  train: ../data/train_dataset
+  train: ../data/train_dataset # lim4349/origin_added_korquad
   predict: ../data/test_dataset
   data: ../data/
   context: ../data/wikipedia_documents.json

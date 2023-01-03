@@ -8,7 +8,7 @@ import datetime
 
 from mrc import MRC
 from omegaconf import OmegaConf
-from datasets import load_from_disk
+from datasets import load_from_disk, load_dataset
 from transformers import (
     AutoModelForQuestionAnswering,
     AutoTokenizer,
@@ -51,8 +51,10 @@ def main(args):
 
     # 모델을 초기화하기 전에 난수를 고정합니다.
     set_seed(config.utils.seed)
-
-    datasets = load_from_disk(config.path.train)
+    try:
+        datasets = load_from_disk(config.path.train)
+    except:
+        datasets = load_dataset(config.path.train)
 
     tokenizer = AutoTokenizer.from_pretrained(
         config.model.name_or_path,
