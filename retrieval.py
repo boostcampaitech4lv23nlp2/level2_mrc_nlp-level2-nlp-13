@@ -737,15 +737,22 @@ if __name__ == "__main__":
         # test bulk
         with timer("bulk query by exhaustive search"):
             df = retriever.retrieve_faiss(full_ds)
-            df["correct"] = df["original_context"] == df["context"]
+            if df["original_context"] in df["context"]:
+                df["correct"] = True
+            else:
+                df["correct"] = False
 
             print("correct retrieval result by faiss", df["correct"].sum() / len(df))
 
     else:
         with timer("bulk query by exhaustive search"):
             df = retriever.retrieve(full_ds)  # 기존에 있던 topk 인자는 class 내에 self로 넣어줌
-            df["correct"] = df["original_context"] == df["context"]
+            if df["original_context"] in df["context"]:
+                df["correct"] = True
+            else:
+                df["correct"] = False
             df.to_csv("retrieval_results.csv", index=False, encoding="utf-8")  # 💥
+
             print(
                 "correct retrieval result by exhaustive search",
                 df["correct"].sum() / len(df),
