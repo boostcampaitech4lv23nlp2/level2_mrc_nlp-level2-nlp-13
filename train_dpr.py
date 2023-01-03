@@ -64,7 +64,7 @@ def main(config):
         max_context_length=config.dense.tokenizer.max_context_length,
         max_question_length=config.dense.tokenizer.max_question_length,
         tokenizer=tokenizer,
-        hard_negative=config.DPR.train.hard_negative,
+        hard_negative=config.dense.train.hard_negative,
     )
     valid_dataset = DenseRetrievalValidDataset(
         data_path=config.dense.path.valid,

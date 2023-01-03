@@ -81,7 +81,7 @@ class DenseRetrievalTrainer:
             #     "token_type_ids": batch[8],  # (batch_size, 256)
             # }
 
-            if self.config.DPR.train.hard_negative:  # hard negative 설정
+            if self.config.dense.train.hard_negative:  # hard negative 설정
                 # Calculate Similarity score & loss
                 """
                 hard negatvie 연산
@@ -94,7 +94,6 @@ class DenseRetrievalTrainer:
                 }
                 p_outputs = self.p_encoder(**p_inputs)  # (batch_size * 2, 768)
                 q_outputs = self.q_encoder(**q_inputs)  # (batch_size, 768)
-                print("p outputs shape : ", p_outputs.shape)
 
             else:
                 p_inputs = {
@@ -107,7 +106,6 @@ class DenseRetrievalTrainer:
 
             # Calculate Similarity score & loss
             sim_score = torch.matmul(q_outputs, torch.transpose(p_outputs, 0, 1))  # (batch_size, batch_size) or (batch_size, batch_size * 2)
-            print("sim score shape : ", sim_score.shape)
 
             # target = position of positive sample = diagonal
             targets = torch.arange(0, self.args.per_device_train_batch_size).long()
