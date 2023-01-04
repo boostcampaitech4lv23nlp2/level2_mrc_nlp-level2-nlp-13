@@ -57,6 +57,7 @@ dense:
   tokenizer:
     max_context_length: 512
     max_question_length: 256
+    return_token_type_ids: True # False for Roberta models
 
   optimizer:
     name: AdamW
