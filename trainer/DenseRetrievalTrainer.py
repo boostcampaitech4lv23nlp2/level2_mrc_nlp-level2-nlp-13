@@ -63,11 +63,11 @@ class DenseRetrievalTrainer:
             if torch.cuda.is_available():
                 batch = tuple(t.cuda() for t in batch)
 
-            p_inputs = {
-                "input_ids": batch[0],
-                "attention_mask": batch[1],
-                "token_type_ids": batch[2],
-            }
+            # p_inputs = {
+            #     "input_ids": batch[0],
+            #     "attention_mask": batch[1],
+            #     "token_type_ids": batch[2],
+            # }
 
             q_inputs = {
                 "input_ids": batch[3],
@@ -75,11 +75,37 @@ class DenseRetrievalTrainer:
                 "token_type_ids": batch[5],
             }
 
-            p_outputs = self.p_encoder(**p_inputs)  # (batch_size, 768)
-            q_outputs = self.q_encoder(**q_inputs)  # (batch_size, 768)
+            # hn_inputs = {
+            #     "input_ids": batch[6],  # (batch_size, 256)
+            #     "attention_mask": batch[7],  # (batch_size, 256)
+            #     "token_type_ids": batch[8],  # (batch_size, 256)
+            # }
+
+            if self.config.dense.train.hard_negative:  # hard negative 설정
+                # Calculate Similarity score & loss
+                """
+                hard negatvie 연산
+                query (batch_size, 768) * passage^T (768, batch_size * 2)
+                """
+                p_inputs = {
+                    "input_ids": torch.cat([batch[0], batch[6]], dim=0),
+                    "attention_mask": torch.cat([batch[1], batch[7]], dim=0),
+                    "token_type_ids": torch.cat([batch[2], batch[8]], dim=0),
+                }
+                p_outputs = self.p_encoder(**p_inputs)  # (batch_size * 2, 768)
+                q_outputs = self.q_encoder(**q_inputs)  # (batch_size, 768)
+
+            else:
+                p_inputs = {
+                    "input_ids": batch[0],
+                    "attention_mask": batch[1],
+                    "token_type_ids": batch[2],
+                }
+                p_outputs = self.p_encoder(**p_inputs)  # (batch_size, 768)
+                q_outputs = self.q_encoder(**q_inputs)  # (batch_size, 768)
 
             # Calculate Similarity score & loss
-            sim_score = torch.matmul(q_outputs, torch.transpose(p_outputs, 0, 1))  # (batch_size, batch_size)
+            sim_score = torch.matmul(q_outputs, torch.transpose(p_outputs, 0, 1))  # (batch_size, batch_size) or (batch_size, batch_size * 2)
 
             # target = position of positive sample = diagonal
             targets = torch.arange(0, self.args.per_device_train_batch_size).long()
