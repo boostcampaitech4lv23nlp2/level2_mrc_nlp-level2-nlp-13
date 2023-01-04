@@ -36,8 +36,7 @@ def timer(name):
 class DenseRetrieval:
     def __init__(
         self,
-        config,
-        data_path: Optional[str] = "./data/wikipedia_documents.json",
+        config
     ):
         self.config = config
         self.tokenizer = AutoTokenizer.from_pretrained(self.config.dense.model.name_or_path)
@@ -45,8 +44,8 @@ class DenseRetrieval:
         self.q_encoder = BertEncoder.from_pretrained(self.config.dense.model.best_q_encoder_path)
         self.passage_embedding_vectors = None  # get_dense_passage_embedding()에서 생성
 
-        self.data_path = data_path
-        with open(data_path, "r") as f:
+        self.data_path = config.path.context
+        with open(self.data_path, "r") as f:
             wiki = json.load(f)
         self.contexts = list(dict.fromkeys(w["text"] for w in wiki.values()))
         self.ids = list(range(len(self.contexts)))
@@ -566,14 +565,14 @@ class HybridRetrieval:
     Sparse Retrieval Score에 Dense Retrieval Score를 더해주어 Reranking 수행
     """
 
-    def __init__(self, tokenize_fn, config, data_path: Optional[str] = "./data/wikipedia_documents.json"):
+    def __init__(self, tokenize_fn, config):
         self.dense_retriever = DenseRetrieval(config)
         self.sparse_retriever = SparseRetrieval(tokenize_fn=tokenize_fn, config=config)
         self.topk = config.retriever.topk
         self.config = config
 
-        self.data_path = data_path
-        with open(data_path, "r") as f:
+        self.data_path = self.config.path.data
+        with open(self.data_path, "r") as f:
             wiki = json.load(f)
         self.contexts = list(dict.fromkeys(w["text"] for w in wiki.values()))
         self.ids = list(range(len(self.contexts)))
@@ -715,8 +714,6 @@ if __name__ == "__main__":
     )  # train dev 를 합친 4192 개 질문에 대해 모두 테스트
     print("*" * 40, "query dataset", "*" * 40)
     print(full_ds)
-
-    from transformers import AutoTokenizer
 
     if config.retriever.type == "sparse":
         tokenizer = AutoTokenizer.from_pretrained(config.model.name_or_path, use_fast=True)
