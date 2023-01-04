@@ -571,7 +571,7 @@ class HybridRetrieval:
         self.topk = config.retriever.topk
         self.config = config
 
-        self.data_path = self.config.path.data
+        self.data_path = self.config.path.context
         with open(self.data_path, "r") as f:
             wiki = json.load(f)
         self.contexts = list(dict.fromkeys(w["text"] for w in wiki.values()))
