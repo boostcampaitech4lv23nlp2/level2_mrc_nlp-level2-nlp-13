@@ -208,3 +208,4 @@ klue-roberta-retrained/
 klue-bert_base-retrained/
 predictions/
 best_model/
+pretrained_model/
