@@ -1,15 +1,14 @@
 import logging
 import os
-from dataclasses import dataclass, field
-from typing import Optional, Union
+from dataclasses import dataclass
+from typing import Optional, Union, Tuple, List
 
 import omegaconf
-from datasets import Dataset, DatasetDict, load_metric
-from transformers import AutoModelForQuestionAnswering, AutoTokenizer, DataCollatorWithPadding, EvalPrediction, TrainingArguments
+from datasets import DatasetDict, load_metric, disable_caching
+from transformers import AutoModelForQuestionAnswering, AutoModelForSeq2SeqLM, AutoTokenizer, DataCollatorWithPadding, DataCollatorForSeq2Seq, EvalPrediction, TrainingArguments
+from trainer.Seq2SeqMRCTrainer import QuestionAnsweringSeq2SeqTrainer
 from utils.trainer_qa import QuestionAnsweringTrainer
 from utils.utils_qa import check_sanity, postprocess_qa_predictions
-from datasets import disable_caching
-disable_caching()
 
 logger = logging.getLogger(__name__)
 
@@ -19,44 +18,89 @@ class MRC:
     config: omegaconf.dictconfig.DictConfig
     training_args: TrainingArguments
     tokenizer: AutoTokenizer
-    model: AutoModelForQuestionAnswering
+    model: Union[AutoModelForQuestionAnswering, AutoModelForSeq2SeqLM]
     datasets: Optional[DatasetDict] = None
 
     def __post_init__(self):
         check_sanity(self.config, self.tokenizer)
-        if self.datasets is not None:
-            self.mode = "train"
-            self.train_dataset = self.datasets["train"]
-            self.train_dataset = self.train_dataset.map(
-                self.prepare_train_features,
-                batched=True,  # default batch_size = 1000
-                remove_columns=self.train_dataset.column_names,
-                load_from_cache_file=not self.config.utils.overwrite_cache,
-            )
-            self.eval_examples = self.datasets["validation"]
-            self.eval_dataset = self.eval_examples.map(
-                self.prepare_validation_features,
-                batched=True,
-                remove_columns=self.eval_examples.column_names,
-                load_from_cache_file=not self.config.utils.overwrite_cache,
-            )
-            assert len(self.eval_dataset) != len(self.eval_examples)
-        else:
-            self.mode = "predict"
+        if isinstance(self.model, AutoModelForQuestionAnswering):
+            print("inside")
+            if self.datasets is not None:
+                self.mode = "train"
+                self.train_dataset = self.datasets["train"]
+                self.train_dataset = self.train_dataset.map(
+                    self.prepare_train_features,
+                    batched=True,  # default batch_size = 1000
+                    remove_columns=self.train_dataset.column_names,
+                    load_from_cache_file=not self.config.utils.overwrite_cache,
+                )
+                self.eval_examples = self.datasets["validation"]
+                self.eval_dataset = self.eval_examples.map(
+                    self.prepare_validation_features,
+                    batched=True,
+                    remove_columns=self.eval_examples.column_names,
+                    load_from_cache_file=not self.config.utils.overwrite_cache,
+                )
+                assert len(self.eval_dataset) != len(self.eval_examples)
+            else:
+                self.mode = "predict"
 
-        # Data collator
-        # flag가 True이면 이미 max length로 padding된 상태입니다.
-        # 그렇지 않다면 data collator에서 padding을 진행해야합니다.
-        data_collator = DataCollatorWithPadding(self.tokenizer, pad_to_multiple_of=8 if self.config.train.fp16 else None)
-        def model_init():
-            return AutoModelForQuestionAnswering.from_pretrained(
-                self.config.model.name_or_path,
-                from_tf=bool(".ckpt" in self.config.model.name_or_path),
-            )
-        # Trainer 초기화
-        if self.mode == "train":
-            self.trainer = QuestionAnsweringTrainer(
-                model_init=model_init,
+            # Data collator
+            # flag가 True이면 이미 max length로 padding된 상태입니다.
+            # 그렇지 않다면 data collator에서 padding을 진행해야합니다.
+            data_collator = DataCollatorWithPadding(self.tokenizer, pad_to_multiple_of=8 if self.config.train.fp16 else None)
+            def model_init():
+                return AutoModelForQuestionAnswering.from_pretrained(
+                    self.config.model.name_or_path,
+                    from_tf=bool(".ckpt" in self.config.model.name_or_path),
+                )
+            # Trainer 초기화
+            if self.mode == "train":
+                self.trainer = QuestionAnsweringTrainer(
+                    model_init=model_init,
+                    model=self.model,
+                    args=self.training_args,
+                    train_dataset=self.train_dataset,
+                    eval_dataset=self.eval_dataset,
+                    eval_examples=self.eval_examples,
+                    tokenizer=self.tokenizer,
+                    data_collator=data_collator,
+                    post_process_function=self.post_processing_function,
+                    compute_metrics=self.compute_metrics,
+                )
+                    
+            else:
+                # inference
+                self.trainer = QuestionAnsweringTrainer(
+                    model=self.model,
+                    args=self.training_args,
+                    tokenizer=self.tokenizer,
+                    data_collator=data_collator,
+                    post_process_function=self.post_processing_function,
+                    compute_metrics=self.compute_metrics,
+                )
+        elif isinstance(self.model, AutoModelForSeq2SeqLM):
+            if self.datasets is not None:
+                self.mode = "train"
+                self.train_dataset = self.datasets["train"]
+                self.train_dataset = self.train_dataset.map(
+                    self.prepare_train_features_generative,
+                    batched=True,  # default batch_size = 1000
+                    remove_columns=self.train_dataset.column_names,
+                    load_from_cache_file=not self.config.utils.overwrite_cache,
+                )
+                self.eval_examples = self.datasets["validation"]
+                self.eval_dataset = self.eval_examples.map(
+                    self.prepare_validation_features_generative,
+                    batched=True,
+                    remove_columns=self.eval_examples.column_names,
+                    load_from_cache_file=not self.config.utils.overwrite_cache,
+                )
+                assert len(self.eval_dataset) != len(self.eval_examples)
+            else:
+                self.mode = "predict"
+            data_collator = DataCollatorForSeq2Seq(self.tokenizer, model=self.model, label_pad_token_id=self.tokenizer.pad_token_id)
+            self.trainer = QuestionAnsweringSeq2SeqTrainer(
                 model=self.model,
                 args=self.training_args,
                 train_dataset=self.train_dataset,
@@ -64,19 +108,8 @@ class MRC:
                 eval_examples=self.eval_examples,
                 tokenizer=self.tokenizer,
                 data_collator=data_collator,
-                post_process_function=self.post_processing_function,
                 compute_metrics=self.compute_metrics,
-            )
-                
-        else:
-            # inference
-            self.trainer = QuestionAnsweringTrainer(
-                model=self.model,
-                args=self.training_args,
-                tokenizer=self.tokenizer,
-                data_collator=data_collator,
-                post_process_function=self.post_processing_function,
-                compute_metrics=self.compute_metrics,
+                post_process_function=self.post_processing_function_generative,   
             )
 
     def train(self, checkpoint=None):
@@ -269,3 +302,98 @@ class MRC:
     def compute_metrics(self, p: EvalPrediction):
         metric = load_metric("squad")
         return metric.compute(predictions=p.predictions, references=p.label_ids)
+
+    def preprocess_squad_batch(
+        self,
+        examples,
+        question_column: str,
+        context_column: str,
+        answer_column: str,
+    ) -> Tuple[List[str], List[str]]:
+        questions = examples[question_column]
+        contexts = examples[context_column]
+        answers = examples[answer_column]
+
+        def generate_input(_question, _context):
+            return " ".join(["question:", _question.lstrip(), "context:", _context.lstrip()])
+
+        inputs = [generate_input(question, context) for question, context in zip(questions, contexts)]
+        targets = [answer["text"][0] if len(answer["text"]) > 0 else "" for answer in answers]
+        return inputs, targets
+
+    def preprocess_train_features_generative(self, examples):
+        column_names = self.train_dataset.column_names
+        question_column_name = "question" if "question" in column_names else column_names[0] 
+        context_column_name = "context" if "context" in column_names else column_names[1]
+        answer_column_name = "answers" if "answers" in column_names else column_names[2]
+        inputs, targets = self.preprocess_squad_batch(examples, question_column_name, context_column_name, answer_column_name)
+
+        model_inputs = self.tokenizer(
+            inputs, 
+            truncation="only_second",
+            **self.config.tokenizer,
+        )
+        # Tokenize targets with text_target=...
+        labels = self.tokenizer(
+            text_target=targets, 
+            truncation=True, 
+            **self.config.tokenizer,
+        )
+
+        # If we are padding here, replace all tokenizer.pad_token_id in the labels by -100 when we want to ignore
+        # padding in the loss.
+        # if padding == "max_length" and data_args.ignore_pad_token_for_loss:
+        #     labels["input_ids"] = [
+        #         [(l if l != tokenizer.pad_token_id else -100) for l in label] for label in labels["input_ids"]
+        #     ]
+
+        model_inputs["labels"] = labels["input_ids"]
+        return model_inputs
+
+    # Validation preprocessing
+    def preprocess_validation_features_generative(self,examples):
+        column_names = self.eval_dataset.column_names
+        question_column_name = "question" if "question" in column_names else column_names[0] 
+        context_column_name = "context" if "context" in column_names else column_names[1]
+        answer_column_name = "answers" if "answers" in column_names else column_names[2]
+        inputs, targets = self.preprocess_squad_batch(examples, question_column_name, context_column_name, answer_column_name)
+
+        model_inputs = self.tokenizer(
+            inputs,
+            truncation="only_second",
+            return_overflowing_tokens=True,
+            return_offsets_mapping=True,
+            **self.config.tokenizer,
+        )
+        # Tokenize targets with the `text_target` keyword argument
+        labels = self.tokenizer(
+            text_target=targets, 
+            truncation="only_second",
+            **self.config.tokenizer,    
+        )
+
+        # If we are padding here, replace all tokenizer.pad_token_id in the labels by -100 when we want to ignore
+        # # padding in the loss.
+        # if padding == "max_length" and data_args.ignore_pad_token_for_loss:
+        #     labels["input_ids"] = [
+        #         [(l if l != tokenizer.pad_token_id else -100) for l in label] for label in labels["input_ids"]
+        #     ]
+
+        # Since one example might give us several features if it has a long context, we need a map from a feature to
+        # its corresponding example. This key gives us just that.
+        sample_mapping = model_inputs.pop("overflow_to_sample_mapping")
+
+        # For evaluation, we will need to convert our predictions to substrings of the context, so we keep the
+        # corresponding example_id and we will store the offset mappings.
+        model_inputs["example_id"] = []
+        # Augment the overflowing tokens to the labels
+        labels_out = []
+
+        for i in range(len(model_inputs["input_ids"])):
+            # One example can give several spans, this is the index of the example containing this span of text.
+            sample_index = sample_mapping[i]
+            model_inputs["example_id"].append(examples["id"][sample_index])
+            labels_out.append(labels["input_ids"][sample_index])
+
+        model_inputs["labels"] = labels_out
+        return model_inputs
