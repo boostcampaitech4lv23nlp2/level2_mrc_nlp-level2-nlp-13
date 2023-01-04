@@ -6,12 +6,14 @@ import sys
 
 import pytz
 import torch
+from omegaconf import OmegaConf
+from transformers import AutoTokenizer, TrainingArguments, set_seed
+
 import wandb
 from dataset.DPR_Dataset import DenseRetrievalTrainDataset, DenseRetrievalValidDataset
 from model.Retrieval.BertEncoder import BertEncoder
-from omegaconf import OmegaConf
+from model.Retrieval.RobertaEncoder import RobertaEncoder
 from trainer.DenseRetrievalTrainer import DenseRetrievalTrainer
-from transformers import AutoTokenizer, TrainingArguments, set_seed
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +77,12 @@ def main(config):
 
     # 모델
     logger.info(f"  Encoder model: {config.dense.model.name_or_path}")
-    p_encoder = BertEncoder.from_pretrained(config.dense.model.name_or_path)
-    q_encoder = BertEncoder.from_pretrained(config.dense.model.name_or_path)
+    if config.dense.tokenizer.return_token_type_ids == True:
+        p_encoder = RobertaEncoder.from_pretrained(config.dense.model.name_or_path)
+        q_encoder = RobertaEncoder.from_pretrained(config.dense.model.name_or_path)
+    else:
+        p_encoder = BertEncoder.from_pretrained(config.dense.model.name_or_path)
+        q_encoder = BertEncoder.from_pretrained(config.dense.model.name_or_path)
     if torch.cuda.is_available():
         p_encoder.cuda()
         q_encoder.cuda()
