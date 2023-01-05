@@ -52,7 +52,7 @@ dense:
     name_or_path: klue/bert-base
     best_p_encoder_path: "saved_models/DPR/encoder/p_encoder_best_top_30" 
     best_q_encoder_path: "saved_models/DPR/encoder/q_encoder_best_top_30"
-    saved_p_embs_epoch: 19 # 사용할 saved p_embs epoch (inference 시 사용)
+    saved_p_embs_epoch: 27 # 사용할 saved p_embs epoch (inference 시 사용)
 
   tokenizer:
     max_context_length: 512
@@ -72,6 +72,10 @@ dense:
 
   utils:
     valid_analysis: False # train epoch마다 validation 결과를 csv로 저장할지 여부
+
+generation:
+  max_length: 15
+  num_beams: 3
 
 faiss:
   use_faiss: False # default: False

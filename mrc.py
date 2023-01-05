@@ -5,7 +5,17 @@ from typing import Optional, Union, Tuple, List
 
 import omegaconf
 from datasets import DatasetDict, load_metric, disable_caching
-from transformers import AutoModelForQuestionAnswering, AutoModelForSeq2SeqLM, AutoTokenizer, DataCollatorWithPadding, DataCollatorForSeq2Seq, EvalPrediction, TrainingArguments
+from transformers import (
+    AutoModelForQuestionAnswering, 
+    AutoModelForSeq2SeqLM, 
+    T5ForConditionalGeneration, 
+    T5TokenizerFast,
+    AutoTokenizer, 
+    DataCollatorWithPadding, 
+    DataCollatorForSeq2Seq, 
+    EvalPrediction, 
+    TrainingArguments,
+)
 from trainer.Seq2SeqMRCTrainer import QuestionAnsweringSeq2SeqTrainer
 from utils.trainer_qa import QuestionAnsweringTrainer
 from utils.utils_qa import check_sanity, postprocess_qa_predictions
@@ -17,14 +27,13 @@ logger = logging.getLogger(__name__)
 class MRC:
     config: omegaconf.dictconfig.DictConfig
     training_args: TrainingArguments
-    tokenizer: AutoTokenizer
-    model: Union[AutoModelForQuestionAnswering, AutoModelForSeq2SeqLM]
+    tokenizer: Union[AutoTokenizer, T5TokenizerFast]
+    model: Union[AutoModelForQuestionAnswering, AutoModelForSeq2SeqLM, T5ForConditionalGeneration]
     datasets: Optional[DatasetDict] = None
 
     def __post_init__(self):
         check_sanity(self.config, self.tokenizer)
         if isinstance(self.model, AutoModelForQuestionAnswering):
-            print("inside")
             if self.datasets is not None:
                 self.mode = "train"
                 self.train_dataset = self.datasets["train"]
@@ -79,19 +88,19 @@ class MRC:
                     post_process_function=self.post_processing_function,
                     compute_metrics=self.compute_metrics,
                 )
-        elif isinstance(self.model, AutoModelForSeq2SeqLM):
+        elif isinstance(self.model, AutoModelForSeq2SeqLM) or isinstance(self.model, T5ForConditionalGeneration):
             if self.datasets is not None:
                 self.mode = "train"
                 self.train_dataset = self.datasets["train"]
                 self.train_dataset = self.train_dataset.map(
-                    self.prepare_train_features_generative,
+                    self.preprocess_train_features_generative,
                     batched=True,  # default batch_size = 1000
                     remove_columns=self.train_dataset.column_names,
                     load_from_cache_file=not self.config.utils.overwrite_cache,
                 )
                 self.eval_examples = self.datasets["validation"]
                 self.eval_dataset = self.eval_examples.map(
-                    self.prepare_validation_features_generative,
+                    self.preprocess_validation_features_generative,
                     batched=True,
                     remove_columns=self.eval_examples.column_names,
                     load_from_cache_file=not self.config.utils.overwrite_cache,
@@ -99,18 +108,28 @@ class MRC:
                 assert len(self.eval_dataset) != len(self.eval_examples)
             else:
                 self.mode = "predict"
+
             data_collator = DataCollatorForSeq2Seq(self.tokenizer, model=self.model, label_pad_token_id=self.tokenizer.pad_token_id)
-            self.trainer = QuestionAnsweringSeq2SeqTrainer(
-                model=self.model,
-                args=self.training_args,
-                train_dataset=self.train_dataset,
-                eval_dataset=self.eval_dataset,
-                eval_examples=self.eval_examples,
-                tokenizer=self.tokenizer,
-                data_collator=data_collator,
-                compute_metrics=self.compute_metrics,
-                post_process_function=self.post_processing_function_generative,   
-            )
+            gen_config = dict(self.config.get("generation"))
+            if self.mode == "train":
+                self.trainer = QuestionAnsweringSeq2SeqTrainer(
+                    model=self.model,
+                    args=self.training_args,
+                    train_dataset=self.train_dataset,
+                    eval_dataset=self.eval_dataset,
+                    eval_examples=self.eval_examples,
+                    tokenizer=self.tokenizer,
+                    data_collator=data_collator,
+                    compute_metrics=self.compute_metrics,
+                    post_process_function=self.post_processing_function_generative,   
+                    gen_config=gen_config,
+                )
+            else: 
+                self.trainer = QuestionAnsweringSeq2SeqTrainer(
+                    model=self.model,
+                    args=self.training_args,
+
+                )
 
     def train(self, checkpoint=None):
         train_result = self.trainer.train(resume_from_checkpoint=checkpoint)
@@ -328,11 +347,14 @@ class MRC:
         answer_column_name = "answers" if "answers" in column_names else column_names[2]
         inputs, targets = self.preprocess_squad_batch(examples, question_column_name, context_column_name, answer_column_name)
 
-        model_inputs = self.tokenizer(
+        inputs = self.tokenizer(
             inputs, 
-            truncation="only_second",
+            truncation=True,
+            return_overflowing_tokens=True,
+            return_offsets_mapping=True,
             **self.config.tokenizer,
         )
+
         # Tokenize targets with text_target=...
         labels = self.tokenizer(
             text_target=targets, 
@@ -342,25 +364,62 @@ class MRC:
 
         # If we are padding here, replace all tokenizer.pad_token_id in the labels by -100 when we want to ignore
         # padding in the loss.
-        # if padding == "max_length" and data_args.ignore_pad_token_for_loss:
-        #     labels["input_ids"] = [
-        #         [(l if l != tokenizer.pad_token_id else -100) for l in label] for label in labels["input_ids"]
-        #     ]
+        if self.config.tokenizer.padding == "max_length": # and data_args.ignore_pad_token_for_loss:
+            labels["input_ids"] = [
+                [(l if l != self.tokenizer.pad_token_id else -100) for l in label] for label in labels["input_ids"]
+            ]
 
-        model_inputs["labels"] = labels["input_ids"]
-        return model_inputs
+        sample_mapping = inputs.pop("overflow_to_sample_mapping")
+        offset_mapping = inputs.pop("offset_mapping")
+        
+        new_input_ids, new_attention_mask, new_token_type_ids = [], [], []
+        new_sample_mapping = []
+        for i, offsets in enumerate(offset_mapping):
+            sample_index = sample_mapping[i]
+            answers = examples[answer_column_name][sample_index]      
+            
+            start_char_idx = answers["answer_start"][0]
+            end_char_idx = start_char_idx + len(answers["text"][0])
+            valid_max_idx = len(offsets)-1
+            while offsets[valid_max_idx] == (0,0):
+                # find the offset tuple of the last non-padding_token
+                valid_max_idx -= 1
+            if start_char_idx >= offsets[1][0] and end_char_idx < offsets[valid_max_idx][1]:
+                # if the answer is in the truncated input string
+                # start_char_idx is compared to offsets[1][0], since offsets[0][0] corresponds to a special token like [CLS]
+                # likewise, end_char_idx is compared to offsets[-2][0], since the last offset is a special token 
+                new_input_ids.append(inputs["input_ids"][i])
+                new_attention_mask.append(inputs["attention_mask"][i])
+                new_token_type_ids.append(inputs["token_type_ids"][i])
+                new_sample_mapping.append(sample_mapping[i])
+
+        inputs["input_ids"] = new_input_ids
+        inputs["attention_mask"] = new_attention_mask
+        inputs["token_type_ids"] = new_token_type_ids
+
+        # Augment the overflowing tokens to the labels
+        labels_out = []
+
+        for i in range(len(inputs["input_ids"])):
+            # One example can give several spans, this is the index of the example containing this span of text.
+            sample_index = new_sample_mapping[i]
+            labels_out.append(labels["input_ids"][sample_index])
+
+        inputs["labels"] = labels_out
+        assert len(inputs["input_ids"]) == len(inputs["labels"])
+        return inputs
 
     # Validation preprocessing
-    def preprocess_validation_features_generative(self,examples):
-        column_names = self.eval_dataset.column_names
-        question_column_name = "question" if "question" in column_names else column_names[0] 
-        context_column_name = "context" if "context" in column_names else column_names[1]
-        answer_column_name = "answers" if "answers" in column_names else column_names[2]
+    def preprocess_validation_features_generative(self, examples):
+        # column_names = self.eval_dataset.column_names
+        question_column_name = "question" # if "question" in column_names else column_names[0] 
+        context_column_name = "context" # if "context" in column_names else column_names[1]
+        answer_column_name = "answers" # if "answers" in column_names else column_names[2]
         inputs, targets = self.preprocess_squad_batch(examples, question_column_name, context_column_name, answer_column_name)
 
         model_inputs = self.tokenizer(
             inputs,
-            truncation="only_second",
+            truncation=True,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
             **self.config.tokenizer,
@@ -368,16 +427,16 @@ class MRC:
         # Tokenize targets with the `text_target` keyword argument
         labels = self.tokenizer(
             text_target=targets, 
-            truncation="only_second",
+            truncation=True,
             **self.config.tokenizer,    
         )
 
         # If we are padding here, replace all tokenizer.pad_token_id in the labels by -100 when we want to ignore
         # # padding in the loss.
-        # if padding == "max_length" and data_args.ignore_pad_token_for_loss:
-        #     labels["input_ids"] = [
-        #         [(l if l != tokenizer.pad_token_id else -100) for l in label] for label in labels["input_ids"]
-        #     ]
+        if self.config.tokenizer.padding == "max_length": # and data_args.ignore_pad_token_for_loss:
+            labels["input_ids"] = [
+                [(l if l != self.tokenizer.pad_token_id else -100) for l in label] for label in labels["input_ids"]
+            ]
 
         # Since one example might give us several features if it has a long context, we need a map from a feature to
         # its corresponding example. This key gives us just that.
@@ -397,3 +456,35 @@ class MRC:
 
         model_inputs["labels"] = labels_out
         return model_inputs
+
+    def post_processing_function_generative(self, examples, features, outputs, stage="eval"):
+        # decode
+        preds = outputs.predictions
+        if isinstance(preds, tuple):
+            preds = preds[0]
+        decoded_preds = self.tokenizer.batch_decode(preds, skip_special_tokens=True)
+
+        # build a map example to its corresponding features
+        example_id_to_index = {k: i for i, k in enumerate(examples["id"])}
+        feature_per_example = {example_id_to_index[feature["example_id"]]: i for i, feature in enumerate(features)}
+        predictions = {}
+
+        for example_index, example in enumerate(examples):
+            feature_index = feature_per_example[example_index]
+            predictions[example["id"]] = decoded_preds[feature_index]
+
+        formatted_predictions = [{"id": k, "prediction_text": v} for k, v in predictions.items()]
+        import pandas as pd
+        df = pd.DataFrame(formatted_predictions)
+        df.to_csv("t5_predictions_new.csv")
+        # references = [{"id": ex["id"], "answers": ex["answers"]} for ex in examples]
+        # return EvalPrediction(predictions=formatted_predictions, label_ids=references)
+
+        if self.mode == "train":
+            column_names = examples.column_names
+            answer_column_name = "answers" if "answers" in column_names else column_names[2]
+            references = [{"id": example["id"], "answers": example[answer_column_name]} for example in examples]
+            return EvalPrediction(predictions=formatted_predictions, label_ids=references)
+
+        elif self.mode == "predict":
+            return formatted_predictions

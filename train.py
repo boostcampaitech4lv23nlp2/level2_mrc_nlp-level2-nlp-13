@@ -12,6 +12,8 @@ from datasets import load_from_disk, load_dataset
 from transformers import (
     AutoModelForQuestionAnswering,
     AutoTokenizer,
+    T5TokenizerFast, 
+    T5ForConditionalGeneration,
     TrainingArguments,
     set_seed,
 )
@@ -57,15 +59,27 @@ def main(args):
     except:
         datasets = load_dataset(config.path.train)
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        config.model.name_or_path,
-        from_tf=bool(".ckpt" in config.model.name_or_path),
-        use_fast=True,
-    )
-    model = AutoModelForQuestionAnswering.from_pretrained(
-        config.model.name_or_path,
-        from_tf=bool(".ckpt" in config.model.name_or_path),
-    )
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            config.model.name_or_path,
+            from_tf=bool(".ckpt" in config.model.name_or_path),
+            use_fast=True,
+        )
+        model = AutoModelForQuestionAnswering.from_pretrained(
+            config.model.name_or_path,
+            from_tf=bool(".ckpt" in config.model.name_or_path),
+        )
+    except:
+        tokenizer = T5TokenizerFast.from_pretrained(
+            config.model.name_or_path,
+            from_tf=bool(".ckpt" in config.model.name_or_path),
+            use_fast=True,
+        )
+        model = T5ForConditionalGeneration.from_pretrained(
+            config.model.name_or_path,
+            from_tf=bool(".ckpt" in config.model.name_or_path),
+        )    
+        training_args.predict_with_generate = True
 
     reader = MRC(
         config=config,
