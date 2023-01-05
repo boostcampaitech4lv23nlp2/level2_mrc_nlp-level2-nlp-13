@@ -128,7 +128,11 @@ class MRC:
                 self.trainer = QuestionAnsweringSeq2SeqTrainer(
                     model=self.model,
                     args=self.training_args,
-
+                    tokenizer=self.tokenizer,
+                    data_collator=data_collator,
+                    compute_metrics=self.compute_metrics,
+                    post_process_function=self.post_processing_function_generative,
+                    gen_config=gen_config
                 )
 
     def train(self, checkpoint=None):
