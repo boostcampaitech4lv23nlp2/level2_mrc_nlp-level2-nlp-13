@@ -100,7 +100,7 @@ def main(args):
         best_run = reader.trainer.hyperparameter_search(n_trials=2, direction="maximize", hp_space=ray_hp_space, backend='ray')
 
     else:
-        reader.train(checkpoint=config.path.resume)
+        #reader.train(checkpoint=config.path.resume)
         eval_metrics = reader.evaluate()
 
     # share the pretrained model to huggingface hub

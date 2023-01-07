@@ -45,7 +45,7 @@ class DenseRetrieval:
         self.q_encoder = BertEncoder.from_pretrained(self.config.dense.model.best_q_encoder_path)
         self.passage_embedding_vectors = None  # get_dense_passage_embedding()에서 생성
 
-        self.data_path = data_path
+        data_path = self.config.path.context 
         with open(data_path, "r") as f:
             wiki = json.load(f)
         self.contexts = list(dict.fromkeys(w["text"] for w in wiki.values()))

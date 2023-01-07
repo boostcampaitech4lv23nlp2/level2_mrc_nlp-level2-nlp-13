@@ -15,8 +15,14 @@ from datasets import Dataset, DatasetDict, Features, Value, load_from_disk
 from mrc import MRC
 from omegaconf import OmegaConf, dictconfig
 from retrieval import DenseRetrieval, HybridRetrieval, SparseRetrieval
-from transformers import AutoModelForQuestionAnswering, AutoTokenizer, TrainingArguments, set_seed
-
+from transformers import (
+    AutoModelForQuestionAnswering,
+    AutoTokenizer,
+    T5TokenizerFast, 
+    T5ForConditionalGeneration,
+    TrainingArguments,
+    set_seed,
+)
 logger = logging.getLogger(__name__)
 
 
@@ -50,15 +56,27 @@ def main(args):
     datasets = load_from_disk(config.path.predict)
     print(datasets)
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        config.model.name_or_path,
-        from_tf=bool(".ckpt" in config.model.name_or_path),
-        use_fast=True,
-    )
-    model = AutoModelForQuestionAnswering.from_pretrained(
-        config.model.name_or_path,
-        from_tf=bool(".ckpt" in config.model.name_or_path),
-    )
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            config.model.name_or_path,
+            from_tf=bool(".ckpt" in config.model.name_or_path),
+            use_fast=True,
+        )
+        model = AutoModelForQuestionAnswering.from_pretrained(
+            config.model.name_or_path,
+            from_tf=bool(".ckpt" in config.model.name_or_path),
+        )
+    except:
+        tokenizer = T5TokenizerFast.from_pretrained(
+            config.model.name_or_path,
+            from_tf=bool(".ckpt" in config.model.name_or_path),
+            use_fast=True,
+        )
+        model = T5ForConditionalGeneration.from_pretrained(
+            config.model.name_or_path,
+            from_tf=bool(".ckpt" in config.model.name_or_path),
+        )    
+        training_args.predict_with_generate = True
     print(f"Get the pretrained model {config.model.name_or_path}")
 
     reader = MRC(

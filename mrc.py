@@ -89,6 +89,7 @@ class MRC:
                     compute_metrics=self.compute_metrics,
                 )
         elif isinstance(self.model, AutoModelForSeq2SeqLM) or isinstance(self.model, T5ForConditionalGeneration):
+            print(" *** generative *** ")
             if self.datasets is not None:
                 self.mode = "train"
                 self.train_dataset = self.datasets["train"]
@@ -159,6 +160,13 @@ class MRC:
 
     def evaluate(self, eval_dataset=None, eval_examples=None, ignore_keys=None):
         logger.info("*** Evaluate ***")
+        if eval_examples is not None and eval_dataset is None:
+            eval_dataset = eval_examples.map(
+                self.prepare_validation_features,
+                batched=True,
+                remove_columns=eval_examples.column_names,
+                load_from_cache_file=not self.config.utils.overwrite_cache,
+            )
         metrics = self.trainer.evaluate(
             eval_dataset=eval_dataset,  # prepocessed
             eval_examples=eval_examples,  # unpreprocessed
@@ -463,6 +471,7 @@ class MRC:
 
     def post_processing_function_generative(self, examples, features, outputs, stage="eval"):
         # decode
+        print("post_processing")
         preds = outputs.predictions
         if isinstance(preds, tuple):
             preds = preds[0]
@@ -478,9 +487,11 @@ class MRC:
             predictions[example["id"]] = decoded_preds[feature_index]
 
         formatted_predictions = [{"id": k, "prediction_text": v} for k, v in predictions.items()]
-        import pandas as pd
-        df = pd.DataFrame(formatted_predictions)
-        df.to_csv("t5_predictions_new.csv")
+        
+        # import pandas as pd
+        import json
+        # df = pd.DataFrame(formatted_predictions)
+        # df.to_csv("t5_predictions_new.csv")
         # references = [{"id": ex["id"], "answers": ex["answers"]} for ex in examples]
         # return EvalPrediction(predictions=formatted_predictions, label_ids=references)
 
@@ -491,4 +502,16 @@ class MRC:
             return EvalPrediction(predictions=formatted_predictions, label_ids=references)
 
         elif self.mode == "predict":
-            return formatted_predictions
+            output_dir = self.config.train.output_dir
+            if not os.path.isdir(output_dir):
+                os.makedir(output_dir)
+
+            prediction_file = os.path.join(
+                output_dir,
+                "predictions_t5.json",
+            )
+            logger.info(f"Saving predictions to {prediction_file}.")
+            with open(prediction_file, "w", encoding="utf-8") as writer:
+                print("Saving json")
+                writer.write(json.dumps(predictions, indent=4, ensure_ascii=False) + "\n")
+        return formatted_predictions
