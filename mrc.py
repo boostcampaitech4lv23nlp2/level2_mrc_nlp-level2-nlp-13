@@ -6,14 +6,14 @@ from typing import Optional, Union, Tuple, List
 import omegaconf
 from datasets import DatasetDict, load_metric, disable_caching
 from transformers import (
-    AutoModelForQuestionAnswering, 
-    AutoModelForSeq2SeqLM, 
-    T5ForConditionalGeneration, 
+    AutoModelForQuestionAnswering,
+    AutoModelForSeq2SeqLM,
+    T5ForConditionalGeneration,
     T5TokenizerFast,
-    AutoTokenizer, 
-    DataCollatorWithPadding, 
-    DataCollatorForSeq2Seq, 
-    EvalPrediction, 
+    AutoTokenizer,
+    DataCollatorWithPadding,
+    DataCollatorForSeq2Seq,
+    EvalPrediction,
     TrainingArguments,
 )
 from trainer.Seq2SeqMRCTrainer import QuestionAnsweringSeq2SeqTrainer
@@ -33,7 +33,9 @@ class MRC:
 
     def __post_init__(self):
         check_sanity(self.config, self.tokenizer)
-        if isinstance(self.model, AutoModelForQuestionAnswering):
+        print(self.model)
+        if "QuestionAnswering" in str(type(self.model)):  # isinstance(self.model, AutoModelForQuestionAnswering):
+            print("extractive")
             if self.datasets is not None:
                 self.mode = "train"
                 self.train_dataset = self.datasets["train"]
@@ -58,13 +60,16 @@ class MRC:
             # flag가 True이면 이미 max length로 padding된 상태입니다.
             # 그렇지 않다면 data collator에서 padding을 진행해야합니다.
             data_collator = DataCollatorWithPadding(self.tokenizer, pad_to_multiple_of=8 if self.config.train.fp16 else None)
+
             def model_init():
                 return AutoModelForQuestionAnswering.from_pretrained(
                     self.config.model.name_or_path,
                     from_tf=bool(".ckpt" in self.config.model.name_or_path),
                 )
+
             # Trainer 초기화
             if self.mode == "train":
+                print("initialize QuestionAnsweringTrainer")
                 self.trainer = QuestionAnsweringTrainer(
                     model_init=model_init,
                     model=self.model,
@@ -77,7 +82,7 @@ class MRC:
                     post_process_function=self.post_processing_function,
                     compute_metrics=self.compute_metrics,
                 )
-                    
+
             else:
                 # inference
                 self.trainer = QuestionAnsweringTrainer(
@@ -122,10 +127,10 @@ class MRC:
                     tokenizer=self.tokenizer,
                     data_collator=data_collator,
                     compute_metrics=self.compute_metrics,
-                    post_process_function=self.post_processing_function_generative,   
+                    post_process_function=self.post_processing_function_generative,
                     gen_config=gen_config,
                 )
-            else: 
+            else:
                 self.trainer = QuestionAnsweringSeq2SeqTrainer(
                     model=self.model,
                     args=self.training_args,
@@ -133,7 +138,7 @@ class MRC:
                     data_collator=data_collator,
                     compute_metrics=self.compute_metrics,
                     post_process_function=self.post_processing_function_generative,
-                    gen_config=gen_config
+                    gen_config=gen_config,
                 )
 
     def train(self, checkpoint=None):
@@ -160,13 +165,7 @@ class MRC:
 
     def evaluate(self, eval_dataset=None, eval_examples=None, ignore_keys=None):
         logger.info("*** Evaluate ***")
-        if eval_examples is not None and eval_dataset is None:
-            eval_dataset = eval_examples.map(
-                self.prepare_validation_features,
-                batched=True,
-                remove_columns=eval_examples.column_names,
-                load_from_cache_file=not self.config.utils.overwrite_cache,
-            )
+        
         metrics = self.trainer.evaluate(
             eval_dataset=eval_dataset,  # prepocessed
             eval_examples=eval_examples,  # unpreprocessed
@@ -287,6 +286,10 @@ class MRC:
             tokenized_examples["offset_mapping"][i] = [
                 (offsets if sequence_ids[k] == context_index else None) for k, offsets in enumerate(tokenized_examples["offset_mapping"][i])
             ]
+
+            print(f"id: {examples['id'][sample_index]}, inputs: {self.tokenizer.decode(tokenized_examples['input_ids'][i])}")
+            if i == 10:
+                break
         return tokenized_examples
 
     def post_processing_function(self, examples, features, predictions):
@@ -354,13 +357,13 @@ class MRC:
 
     def preprocess_train_features_generative(self, examples):
         column_names = self.train_dataset.column_names
-        question_column_name = "question" if "question" in column_names else column_names[0] 
+        question_column_name = "question" if "question" in column_names else column_names[0]
         context_column_name = "context" if "context" in column_names else column_names[1]
         answer_column_name = "answers" if "answers" in column_names else column_names[2]
         inputs, targets = self.preprocess_squad_batch(examples, question_column_name, context_column_name, answer_column_name)
 
         inputs = self.tokenizer(
-            inputs, 
+            inputs,
             truncation=True,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
@@ -369,37 +372,35 @@ class MRC:
 
         # Tokenize targets with text_target=...
         labels = self.tokenizer(
-            text_target=targets, 
-            truncation=True, 
+            text_target=targets,
+            truncation=True,
             **self.config.tokenizer,
         )
 
         # If we are padding here, replace all tokenizer.pad_token_id in the labels by -100 when we want to ignore
         # padding in the loss.
-        if self.config.tokenizer.padding == "max_length": # and data_args.ignore_pad_token_for_loss:
-            labels["input_ids"] = [
-                [(l if l != self.tokenizer.pad_token_id else -100) for l in label] for label in labels["input_ids"]
-            ]
+        if self.config.tokenizer.padding == "max_length":  # and data_args.ignore_pad_token_for_loss:
+            labels["input_ids"] = [[(l if l != self.tokenizer.pad_token_id else -100) for l in label] for label in labels["input_ids"]]
 
         sample_mapping = inputs.pop("overflow_to_sample_mapping")
         offset_mapping = inputs.pop("offset_mapping")
-        
+
         new_input_ids, new_attention_mask, new_token_type_ids = [], [], []
         new_sample_mapping = []
         for i, offsets in enumerate(offset_mapping):
             sample_index = sample_mapping[i]
-            answers = examples[answer_column_name][sample_index]      
-            
+            answers = examples[answer_column_name][sample_index]
+
             start_char_idx = answers["answer_start"][0]
             end_char_idx = start_char_idx + len(answers["text"][0])
-            valid_max_idx = len(offsets)-1
-            while offsets[valid_max_idx] == (0,0):
+            valid_max_idx = len(offsets) - 1
+            while offsets[valid_max_idx] == (0, 0):
                 # find the offset tuple of the last non-padding_token
                 valid_max_idx -= 1
             if start_char_idx >= offsets[1][0] and end_char_idx < offsets[valid_max_idx][1]:
                 # if the answer is in the truncated input string
                 # start_char_idx is compared to offsets[1][0], since offsets[0][0] corresponds to a special token like [CLS]
-                # likewise, end_char_idx is compared to offsets[-2][0], since the last offset is a special token 
+                # likewise, end_char_idx is compared to offsets[-2][0], since the last offset is a special token
                 new_input_ids.append(inputs["input_ids"][i])
                 new_attention_mask.append(inputs["attention_mask"][i])
                 new_token_type_ids.append(inputs["token_type_ids"][i])
@@ -424,9 +425,9 @@ class MRC:
     # Validation preprocessing
     def preprocess_validation_features_generative(self, examples):
         # column_names = self.eval_dataset.column_names
-        question_column_name = "question" # if "question" in column_names else column_names[0] 
-        context_column_name = "context" # if "context" in column_names else column_names[1]
-        answer_column_name = "answers" # if "answers" in column_names else column_names[2]
+        question_column_name = "question"  # if "question" in column_names else column_names[0]
+        context_column_name = "context"  # if "context" in column_names else column_names[1]
+        answer_column_name = "answers"  # if "answers" in column_names else column_names[2]
         inputs, targets = self.preprocess_squad_batch(examples, question_column_name, context_column_name, answer_column_name)
 
         model_inputs = self.tokenizer(
@@ -438,17 +439,15 @@ class MRC:
         )
         # Tokenize targets with the `text_target` keyword argument
         labels = self.tokenizer(
-            text_target=targets, 
+            text_target=targets,
             truncation=True,
-            **self.config.tokenizer,    
+            **self.config.tokenizer,
         )
 
         # If we are padding here, replace all tokenizer.pad_token_id in the labels by -100 when we want to ignore
         # # padding in the loss.
-        if self.config.tokenizer.padding == "max_length": # and data_args.ignore_pad_token_for_loss:
-            labels["input_ids"] = [
-                [(l if l != self.tokenizer.pad_token_id else -100) for l in label] for label in labels["input_ids"]
-            ]
+        if self.config.tokenizer.padding == "max_length":  # and data_args.ignore_pad_token_for_loss:
+            labels["input_ids"] = [[(l if l != self.tokenizer.pad_token_id else -100) for l in label] for label in labels["input_ids"]]
 
         # Since one example might give us several features if it has a long context, we need a map from a feature to
         # its corresponding example. This key gives us just that.
@@ -465,7 +464,6 @@ class MRC:
             sample_index = sample_mapping[i]
             model_inputs["example_id"].append(examples["id"][sample_index])
             labels_out.append(labels["input_ids"][sample_index])
-
         model_inputs["labels"] = labels_out
         return model_inputs
 
@@ -487,9 +485,10 @@ class MRC:
             predictions[example["id"]] = decoded_preds[feature_index]
 
         formatted_predictions = [{"id": k, "prediction_text": v} for k, v in predictions.items()]
-        
+
         # import pandas as pd
         import json
+
         # df = pd.DataFrame(formatted_predictions)
         # df.to_csv("t5_predictions_new.csv")
         # references = [{"id": ex["id"], "answers": ex["answers"]} for ex in examples]

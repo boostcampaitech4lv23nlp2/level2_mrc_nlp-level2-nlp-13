@@ -12,12 +12,13 @@ from datasets import load_from_disk, load_dataset
 from transformers import (
     AutoModelForQuestionAnswering,
     AutoTokenizer,
-    T5TokenizerFast, 
+    T5TokenizerFast,
     T5ForConditionalGeneration,
     TrainingArguments,
     set_seed,
 )
 from ray import tune
+
 logger = logging.getLogger(__name__)
 
 
@@ -78,7 +79,7 @@ def main(args):
         model = T5ForConditionalGeneration.from_pretrained(
             config.model.name_or_path,
             from_tf=bool(".ckpt" in config.model.name_or_path),
-        )    
+        )
         training_args.predict_with_generate = True
 
     reader = MRC(
@@ -88,19 +89,21 @@ def main(args):
         model=model,
         datasets=datasets,
     )
-    if config['hyper_parameter_search'] is True:
+    if config["hyper_parameter_search"] is True:
+
         def ray_hp_space(trial):
             return {
                 "per_device_train_batch_size": tune.choice([8, 16]),
                 "learning_rate": tune.loguniform(5e-6, 5e-4),
                 "num_train_epochs": tune.choice(range(1, 2)),
                 "seed": tune.choice(range(1, 42)),
-                "warmup_steps":tune.choice(range(0, 500)),
+                "warmup_steps": tune.choice(range(0, 500)),
             }
-        best_run = reader.trainer.hyperparameter_search(n_trials=2, direction="maximize", hp_space=ray_hp_space, backend='ray')
+
+        best_run = reader.trainer.hyperparameter_search(n_trials=2, direction="maximize", hp_space=ray_hp_space, backend="ray")
 
     else:
-        #reader.train(checkpoint=config.path.resume)
+        # reader.train(checkpoint=config.path.resume)
         eval_metrics = reader.evaluate()
 
     # share the pretrained model to huggingface hub
