@@ -84,7 +84,7 @@ Dense Embedding을 사용하시려면 `config.retriever.type`을 `dense`로 입�
 </div>
 </details>
 
-## 3️⃣ How to Run
+## 5️⃣ How to Run
 ## 환경 설정
 ```python
 $ bash install_requirements.sh
