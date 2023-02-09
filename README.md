@@ -88,7 +88,7 @@ Dense Embedding을 사용하시려면 `config.retriever.type`을 `dense`로 입�
 ## 5️⃣ How to Run
 ## 환경 설정
 ```python
-$ bash install_requirements.sh
+$ bash install/install_requirements.sh
 ```
 
 ## config
