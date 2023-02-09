@@ -33,6 +33,11 @@ Dense Embedding을 사용하시려면 `config.retriever.type`을 `dense`로 입�
 `config.retriever.faiss.use_faiss` 설정을 통하여 retrieval 시 Faiss를 사용할지 결정할 수 있습니다. `config.retriever.faiss.num_clusters`에 지정된 값으로 IndexIVFScalarQuantizer가 만들어내는 클러스터의 갯수를 조정할 수 있으며, 인덱싱 및 거리 계산에 쓰이는 quantizer 방식도 `config.retriever.faiss.metric`으로 정할 수 있습니다. 
 
 ## 3️⃣ How to Run
+## 환경 설정
+```python
+$ bash install_requirements.sh
+``
+
 ## config
 이 템플렛에서는 config.yaml 파일로 모든 훈련과 추론 설정을 조정할 수 있습니다. 사용할 config 파일은 cli 상 `--config`나 `-c`로 지정해 줄 수 있습니다 (디폴트 custom_config.yaml). 
 
