@@ -13,6 +13,7 @@
 
 ## 3️⃣ 데이터
 ![ODQA_data](https://user-images.githubusercontent.com/65378914/217733088-a82c1f7e-9739-4192-9e8c-7314fc4bcde0.png)
+
 MRC 데이터의 경우, HuggingFace에서 제공하는 datasets 라이브러리를 이용하여 접근이 가능합니다. 해당 directory를 dataset_name 으로 저장한 후, 아래의 코드를 활용하여 불러올 수 있습니다.
 ```
 # train_dataset을 불러오고 싶은 경우
