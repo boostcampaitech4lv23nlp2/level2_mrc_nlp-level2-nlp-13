@@ -33,7 +33,11 @@ Retrieval 과정에서 사용하는 문서 집합(corpus)은 ./data/wikipedia_do
     ./wikipedia_documents.json
 ```
 
-### 데이터 예시
+<details>
+    <summary><b><font size="10">데이터 예시</font></b></summary>
+<div markdown="1">
+
+```
 ![ex](https://user-images.githubusercontent.com/65378914/217733295-1d6a3166-3582-454b-8e9b-01409b5e8597.png)
 - id: 질문의 고유 id
 - question: 질문
@@ -43,6 +47,9 @@ Retrieval 과정에서 사용하는 문서 집합(corpus)은 ./data/wikipedia_do
 - context: 답변이 포함된 문서
 - title: 문서의 제목
 - document_id: 문서의 고유 id
+```
+</div>
+</details>
 
 ## 4️⃣ 모델 설명
 ## Reader
@@ -72,6 +79,8 @@ Dense Embedding을 사용하시려면 `config.retriever.type`을 `dense`로 입�
 ```
 .
 ```
+</div>
+</details>
 
 ## 3️⃣ How to Run
 ## 환경 설정
