@@ -94,7 +94,17 @@ $ bash install_requirements.sh
 ## config
 이 템플렛에서는 config.yaml 파일로 모든 훈련과 추론 설정을 조정할 수 있습니다. 사용할 config 파일은 cli 상 `--config`나 `-c`로 지정해 줄 수 있습니다 (디폴트 custom_config.yaml). 
 
-## Reader 
+## Train
+### Retriever 
+Dense
+```
+python train_dpr.py
+```
+
+### Reader 
+```
+python train.py
+```
 **train.py**에서 MRC(machine reading comprehension) reader를 학습하고 검증합니다 (MRC 관련 **mrc.py** 참조). <br>
 Reader로 사용할 사전학습모델은 `config.model.name_or_path`로 지정할 수 있습니다. <br>
 `config.model.name_or_path`에는 HuggingFace hub에 등록된 모델의 이름(e.g. nlpotato/roberta-base-e5)이나 이미 학습되어 로컬에 저장된 모델의 체크포인트 경로(e.g. saved_models/nlpotato/roberta-base-e5/LWJ_12-23-22-11/checkpoint-9500)를 명시해야 합니다. <br>
@@ -108,6 +118,10 @@ tokenizer 관련 설정은 `config.tokenizer`로 조정할 수 있으며, tokeni
 훈련을 재개하려면 기훈련된 trainer 체크포인트가 저장된 폴더의 경로를 `config.path.resume`에 입력하면 되며, 훈련된 모델과 토크나이저를 HuggingFace Hub에 업로드하려면 `config.hf_hb.push_to_hub`을 `True`로 설정하고 hub에 등록할 모델 이름을 `config.hf_hub.save_name`에 입력하면 됩니다. <br>
 Hub에 공유하기 위해서는 터미널에 `huggingface-cli login'을 쳐서 HuggingFace 계정 정보를 등록해야 합니다.<br>
 
+## Test
+```
+python inference.py
+```
 ## 6️⃣ Development Environment
 - Language:
 - 협업툴:
