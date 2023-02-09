@@ -13,6 +13,5 @@ pip install rank-bm25==0.2.2
 pip install scikit-learn==1.2.1
 pip install tqdm
 pip install pandas
-
 # faiss install (if you want to)
 pip install faiss-gpu==1.7.2
