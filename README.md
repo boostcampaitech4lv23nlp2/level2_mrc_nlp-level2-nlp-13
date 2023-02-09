@@ -107,3 +107,8 @@ tokenizer 관련 설정은 `config.tokenizer`로 조정할 수 있으며, tokeni
 `output_dir`를 따로 설정하지 않으면, 학습마다 사용한 사전학습모델과 학습 시작 시간이 명시된 고유의 run_id로 명명된 아웃풋 폴더가 "saved_models/model_name/run_id"에 생깁니다.<br>
 훈련을 재개하려면 기훈련된 trainer 체크포인트가 저장된 폴더의 경로를 `config.path.resume`에 입력하면 되며, 훈련된 모델과 토크나이저를 HuggingFace Hub에 업로드하려면 `config.hf_hb.push_to_hub`을 `True`로 설정하고 hub에 등록할 모델 이름을 `config.hf_hub.save_name`에 입력하면 됩니다. <br>
 Hub에 공유하기 위해서는 터미널에 `huggingface-cli login'을 쳐서 HuggingFace 계정 정보를 등록해야 합니다.<br>
+
+## 6️⃣ Development Environment
+- Language:
+- 협업툴:
+- 개발 환경:
