@@ -33,13 +33,14 @@ Retrieval 과정에서 사용하는 문서 집합(corpus)은 ./data/wikipedia_do
     # 위키피디아 문서 집합. retrieval을 위해 쓰이는 corpus.
     ./wikipedia_documents.json
 ```
+## 데이터 예시
+![ex](https://user-images.githubusercontent.com/65378914/217733295-1d6a3166-3582-454b-8e9b-01409b5e8597.png)
 
 <details>
-    <summary><b><font size="10">데이터 예시</font></b></summary>
+    <summary><b><font size="10">label 설명</font></b></summary>
 <div markdown="1">
 
 ```
-![ex](https://user-images.githubusercontent.com/65378914/217733295-1d6a3166-3582-454b-8e9b-01409b5e8597.png)
 - id: 질문의 고유 id
 - question: 질문
 - answers: 답변에 대한 정보. 하나의 질문에 하나의 답변만 존재함
