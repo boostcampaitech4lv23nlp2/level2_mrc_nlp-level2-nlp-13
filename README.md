@@ -1,6 +1,19 @@
 # Open-Domain Question Answering
+## 1️⃣ Introduction
+본 모델은 질문에 관련된 문서를 찾아주는 "retriever" 단계와 관련된 문서를 읽고 적절한 답변을 찾거나 만들어주는 "reader" 단계로 구성되어 있습니다.
+<p align="center"><img src="https://user-images.githubusercontent.com/65378914/217729308-057c696b-6c1f-41eb-970e-14ea6281c67c.png" width="80%" height="80%"/></p>
 
+## 2️⃣ 팀원 소개
+
+김별희|이원재|이정아|임성근|정준녕|
+:-:|:-:|:-:|:-:|:-:
+<img src='https://avatars.githubusercontent.com/u/42535803?v=4' height=80 width=80px></img>|<img src='https://avatars.githubusercontent.com/u/61496071?v=4' height=80 width=80px></img>|<img src='https://avatars.githubusercontent.com/u/65378914?v=4' height=80 width=80px></img>|<img src='https://avatars.githubusercontent.com/u/14817039?v=4' height=80 width=80px></img>|<img src='https://avatars.githubusercontent.com/u/51015187?v=4' height=80 width=80px></img>
+[Github](https://github.com/kimbyeolhee)|[Github](https://github.com/wjlee-ling)|[Github](https://github.com/jjeongah)|[Github](https://github.com/lim4349)|[Github](https://github.com/ezez-refer)
+
+## 3️⃣ 
+## config
 이 템플렛에서는 config.yaml 파일로 모든 훈련과 추론 설정을 조정할 수 있습니다. 사용할 config 파일은 cli 상 `--config`나 `-c`로 지정해 줄 수 있습니다 (디폴트 custom_config.yaml). 
+본 프로젝트는 지문이 따로 주어지지 않을 때 World Knowledge에 기반해서 질의 응답을 하는 **ODQA(Open-Domain Question Answering)** Task입니다.
 
 ## Reader
 Reader는 주어진 context 문장에서 query 문장의 답이 될 수 있는 sub-string을 찾아냅니다. Reader는 transformers 라이브러리의 ModelForQuestionAnswering 구조로 query를 인풋으로 받아 context 각 토큰별로 답변의 시작점과 끝점이 될 확률을 계산합니다. 답변의 최대 길이는 `config.utils.max_answer_length`로 지정할 수 있습니다.
@@ -18,16 +31,15 @@ Trainer에 입력해야 하는 인자들은 `config.train`에서 설정할 수 �
 
 ## Retreiver
 Retriever는 주어진 query 문장에 적합한 문서들을 데이터베이스에서 읽어옵니다. 이때 불러오는 문서의 수를 `config.retriever.topk`로 지정할 수 있습니다.
-### Sparse 
+### 1. Sparse 
 Sparse Embedding을 사용하시려면 `confing.path.type`을 `sparse`로 선택해야 합니다.
-#### TF-IDF
+#### (1) TF-IDF
 Scikit-learn의 TfidfVectorizer로 query 문장과 context 문서들을 임베딩합니다. `config.retriever.sparse.tfidf_num_features`로 tfidf 벡터의 최대 크기를 지정할 수 있습니다. fit이 끝나고 tf-idf 벡터화된 context 문서들과 TfidfVectorizer 객체는 context 문장들이 저장된 `config.path.context` 폴더에 저장됩니다.
+#### (2) BM25
 
-### Dense
+### 2. Dense
 Dense Embedding을 사용하시려면 `config.retriever.type`을 `dense`로 입력해야 합니다.
 
 ### Faiss
 `config.retriever.faiss.use_faiss` 설정을 통하여 retrieval 시 Faiss를 사용할지 결정할 수 있습니다. `config.retriever.faiss.num_clusters`에 지정된 값으로 IndexIVFScalarQuantizer가 만들어내는 클러스터의 갯수를 조정할 수 있으며, 인덱싱 및 거리 계산에 쓰이는 quantizer 방식도 `config.retriever.faiss.metric`으로 정할 수 있습니다. 
 
-## 주의사항
-1. 
