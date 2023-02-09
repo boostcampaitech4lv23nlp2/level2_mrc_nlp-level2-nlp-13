@@ -36,7 +36,7 @@ Dense Embedding을 사용하시려면 `config.retriever.type`을 `dense`로 입�
 ## 환경 설정
 ```python
 $ bash install_requirements.sh
-``
+```
 
 ## config
 이 템플렛에서는 config.yaml 파일로 모든 훈련과 추론 설정을 조정할 수 있습니다. 사용할 config 파일은 cli 상 `--config`나 `-c`로 지정해 줄 수 있습니다 (디폴트 custom_config.yaml). 
