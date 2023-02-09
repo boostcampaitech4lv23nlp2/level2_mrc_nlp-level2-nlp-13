@@ -3,6 +3,7 @@
 본 프로젝트는 지문이 따로 주어지지 않을 때 World Knowledge에 기반해서 질의 응답을 하는 **ODQA(Open-Domain Question Answering)** Task입니다.
 본 모델은 질문에 관련된 문서를 찾아주는 "retriever" 단계와 관련된 문서를 읽고 적절한 답변을 찾거나 만들어주는 "reader" 단계로 구성되어 있습니다.
 <p align="center"><img src="https://user-images.githubusercontent.com/65378914/217729308-057c696b-6c1f-41eb-970e-14ea6281c67c.png" width="80%" height="80%"/></p>
+- 평가 방법: Exact Match(EM), F1 Score
 
 ## 2️⃣ 팀원 소개
 
