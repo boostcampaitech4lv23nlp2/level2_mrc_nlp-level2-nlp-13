@@ -98,12 +98,12 @@ $ bash install_requirements.sh
 ### Retriever 
 Dense
 ```
-python train_dpr.py
+python train_dpr.py -c base_config
 ```
 
 ### Reader 
 ```
-python train.py
+python train.py -c base_config
 ```
 **train.py**에서 MRC(machine reading comprehension) reader를 학습하고 검증합니다 (MRC 관련 **mrc.py** 참조). <br>
 Reader로 사용할 사전학습모델은 `config.model.name_or_path`로 지정할 수 있습니다. <br>
@@ -120,9 +120,9 @@ Hub에 공유하기 위해서는 터미널에 `huggingface-cli login'을 쳐서 
 
 ## Test
 ```
-python inference.py
+python inference.py -c base_config
 ```
 ## 6️⃣ Development Environment
-- Language:
-- 협업툴:
+- Language: Python 3.8
+- 협업툴: 
 - 개발 환경:
