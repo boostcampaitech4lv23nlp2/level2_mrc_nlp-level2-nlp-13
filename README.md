@@ -11,7 +11,40 @@
 <img src='https://avatars.githubusercontent.com/u/42535803?v=4' height=80 width=80px></img>|<img src='https://avatars.githubusercontent.com/u/61496071?v=4' height=80 width=80px></img>|<img src='https://avatars.githubusercontent.com/u/65378914?v=4' height=80 width=80px></img>|<img src='https://avatars.githubusercontent.com/u/14817039?v=4' height=80 width=80px></img>|<img src='https://avatars.githubusercontent.com/u/51015187?v=4' height=80 width=80px></img>
 [Github](https://github.com/kimbyeolhee)|[Github](https://github.com/wjlee-ling)|[Github](https://github.com/jjeongah)|[Github](https://github.com/lim4349)|[Github](https://github.com/ezez-refer)
 
-## 3️⃣ 모델 설명
+## 3️⃣ 데이터
+![ODQA_data](https://user-images.githubusercontent.com/65378914/217733088-a82c1f7e-9739-4192-9e8c-7314fc4bcde0.png)
+MRC 데이터의 경우, HuggingFace에서 제공하는 datasets 라이브러리를 이용하여 접근이 가능합니다. 해당 directory를 dataset_name 으로 저장한 후, 아래의 코드를 활용하여 불러올 수 있습니다.
+```
+# train_dataset을 불러오고 싶은 경우
+from datasets import load_from_disk
+dataset = load_from_disk("./data/train_dataset/")
+print(dataset)
+```
+Retrieval 과정에서 사용하는 문서 집합(corpus)은 ./data/wikipedia_documents.json 으로 저장되어있습니다. 약 5만 7천개의 unique 한 문서로 이루어져 있습니다.
+데이터셋은 편의성을 위해 Huggingface 에서 제공하는 datasets를 이용하여 pyarrow 형식의 데이터로 저장되어있습니다. 다음은 ./data 구조입니다.
+```
+# 전체 데이터
+./data/
+    # 학습에 사용할 데이터셋. train 과 validation 으로 구성
+    ./train_dataset/
+    # 제출에 사용될 데이터셋. validation 으로 구성
+    ./test_dataset/
+    # 위키피디아 문서 집합. retrieval을 위해 쓰이는 corpus.
+    ./wikipedia_documents.json
+```
+
+### 데이터 예시
+![ex](https://user-images.githubusercontent.com/65378914/217733295-1d6a3166-3582-454b-8e9b-01409b5e8597.png)
+- id: 질문의 고유 id
+- question: 질문
+- answers: 답변에 대한 정보. 하나의 질문에 하나의 답변만 존재함
+- answer_start : 답변의 시작 위치
+- text: 답변의 텍스트
+- context: 답변이 포함된 문서
+- title: 문서의 제목
+- document_id: 문서의 고유 id
+
+## 4️⃣ 모델 설명
 ## Reader
 Reader는 주어진 context 문장에서 query 문장의 답이 될 수 있는 sub-string을 찾아냅니다. <br>
 Reader는 transformers 라이브러리의 ModelForQuestionAnswering 구조로 query를 인풋으로 받아 context 각 토큰별로 답변의 시작점과 끝점이 될 확률을 계산합니다. <br>
@@ -31,6 +64,14 @@ Dense Embedding을 사용하시려면 `config.retriever.type`을 `dense`로 입�
 
 ### Faiss
 `config.retriever.faiss.use_faiss` 설정을 통하여 retrieval 시 Faiss를 사용할지 결정할 수 있습니다. `config.retriever.faiss.num_clusters`에 지정된 값으로 IndexIVFScalarQuantizer가 만들어내는 클러스터의 갯수를 조정할 수 있으며, 인덱싱 및 거리 계산에 쓰이는 quantizer 방식도 `config.retriever.faiss.metric`으로 정할 수 있습니다. 
+
+<details>
+    <summary><b><font size="10">Project Tree</font></b></summary>
+<div markdown="1">
+
+```
+.
+```
 
 ## 3️⃣ How to Run
 ## 환경 설정
