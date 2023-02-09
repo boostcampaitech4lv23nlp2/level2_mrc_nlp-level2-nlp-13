@@ -1,5 +1,5 @@
 path:
-  train: ../data/train_dataset
+  train: ../data/train_dataset # lim4349/origin_added_korquad
   predict: ../data/test_dataset
   data: ../data/
   context: ../data/wikipedia_documents.json
@@ -12,7 +12,7 @@ tokenizer:
   max_length: 384
   padding: max_length
   stride: 128
-  return_token_type_ids: False # False for Roberta models
+  return_token_type_ids: True # False for Roberta models
 
 optimizer: # default AdamW
   learning_rate: 1e-5
@@ -37,6 +37,7 @@ retriever:
   topk: 10
 
 sparse:
+  embedding_type: bm25 # tfidf or bm25
   tfidf_num_features: 50000 # default: 50000. max_num_features for tfidf vectorizer
   lsa: False # apply LSA or not
   lsa_num_features: 1024 # default: 100.
@@ -56,6 +57,7 @@ dense:
   tokenizer:
     max_context_length: 512
     max_question_length: 256
+    return_token_type_ids: True # False for Roberta models
 
   optimizer:
     name: AdamW
@@ -66,7 +68,8 @@ dense:
   train:
     output_dir: # default: saved_models/DPR/model/{wandb_name}_{time}
     num_train_epochs: 30
-    batch_size: 8
+    batch_size: 4
+    hard_negative: True
 
   utils:
     valid_analysis: False # train epoch마다 validation 결과를 csv로 저장할지 여부
@@ -90,3 +93,5 @@ wandb:
 hf_hub:
   push_to_hub: False # whether to push to huggingface hub the pretrained model & tokenizer
   save_name: # name to register. e.g. nlpotato/roberta-base-new-model
+
+hyper_parameter_search: False

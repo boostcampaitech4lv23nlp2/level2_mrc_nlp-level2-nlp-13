@@ -6,9 +6,10 @@ from typing import Optional, Union
 import omegaconf
 from datasets import Dataset, DatasetDict, load_metric
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer, DataCollatorWithPadding, EvalPrediction, TrainingArguments
-
 from utils.trainer_qa import QuestionAnsweringTrainer
 from utils.utils_qa import check_sanity, postprocess_qa_predictions
+from datasets import disable_caching
+disable_caching()
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +48,15 @@ class MRC:
         # flag가 True이면 이미 max length로 padding된 상태입니다.
         # 그렇지 않다면 data collator에서 padding을 진행해야합니다.
         data_collator = DataCollatorWithPadding(self.tokenizer, pad_to_multiple_of=8 if self.config.train.fp16 else None)
-
+        def model_init():
+            return AutoModelForQuestionAnswering.from_pretrained(
+                self.config.model.name_or_path,
+                from_tf=bool(".ckpt" in self.config.model.name_or_path),
+            )
         # Trainer 초기화
         if self.mode == "train":
             self.trainer = QuestionAnsweringTrainer(
+                model_init=model_init,
                 model=self.model,
                 args=self.training_args,
                 train_dataset=self.train_dataset,
@@ -61,6 +67,7 @@ class MRC:
                 post_process_function=self.post_processing_function,
                 compute_metrics=self.compute_metrics,
             )
+                
         else:
             # inference
             self.trainer = QuestionAnsweringTrainer(

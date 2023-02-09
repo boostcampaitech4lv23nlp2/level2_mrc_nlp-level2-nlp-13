@@ -3,19 +3,19 @@ Open-Domain Question Answering 을 수행하는 inference 코드 입니다.
 
 대부분의 로직은 train.py 와 비슷하나 retrieval, predict 부분이 추가되어 있습니다.
 """
+import argparse
 import datetime
 import logging
-import argparse
 import os
 import sys
-import pytz
 from typing import Callable, List
-from datasets import Dataset, DatasetDict, Features, Value, load_from_disk
-from omegaconf import OmegaConf, dictconfig
-from transformers import AutoModelForQuestionAnswering, AutoTokenizer, TrainingArguments, set_seed
 
+import pytz
+from datasets import Dataset, DatasetDict, Features, Value, load_from_disk
 from mrc import MRC
+from omegaconf import OmegaConf, dictconfig
 from retrieval import DenseRetrieval, HybridRetrieval, SparseRetrieval
+from transformers import AutoModelForQuestionAnswering, AutoTokenizer, TrainingArguments, set_seed
 
 logger = logging.getLogger(__name__)
 
@@ -95,9 +95,11 @@ def run_sparse_retrieval(
         tokenize_fn=tokenize_fn,
         config=config,
     )
-    retriever.get_sparse_embedding()
-    retriever.build_faiss()
+    if config.sparse.embedding_type == "tfidf":
+        retriever.get_sparse_embedding()
+        
     if config.faiss.use_faiss:
+        retriever.build_faiss()
         df = retriever.retrieve_faiss(datasets["validation"])
     else:
         df = retriever.retrieve(datasets["validation"])

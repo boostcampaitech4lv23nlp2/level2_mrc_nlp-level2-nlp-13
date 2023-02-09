@@ -201,6 +201,11 @@ outputs/
 
 *.csv
 data/*.csv
-predictions/
+prediction/
+predict/
 best_model/
 klue-roberta-retrained/
+klue-bert_base-retrained/
+predictions/
+best_model/
+pretrained_model/
