@@ -4,6 +4,15 @@
 본 모델은 질문에 관련된 문서를 찾아주는 "retriever" 단계와 관련된 문서를 읽고 적절한 답변을 찾거나 만들어주는 "reader" 단계로 구성되어 있습니다.
 <p align="center"><img src="https://user-images.githubusercontent.com/65378914/217729308-057c696b-6c1f-41eb-970e-14ea6281c67c.png" width="80%" height="80%"/></p>
  - 평가 지표: Exact Match(EM), F1 Score
+<details>
+    <summary><b><font size="10">Project Tree</font></b></summary>
+<div markdown="1">
+
+```
+.
+```
+</div>
+</details>
 
 ## 2️⃣ 팀원 소개
 
@@ -75,16 +84,6 @@ Dense Embedding을 사용하시려면 `config.retriever.type`을 `dense`로 입�
 ### Faiss
 `config.retriever.faiss.use_faiss` 설정을 통하여 retrieval 시 Faiss를 사용할지 결정할 수 있습니다. `config.retriever.faiss.num_clusters`에 지정된 값으로 IndexIVFScalarQuantizer가 만들어내는 클러스터의 갯수를 조정할 수 있으며, 인덱싱 및 거리 계산에 쓰이는 quantizer 방식도 `config.retriever.faiss.metric`으로 정할 수 있습니다. 
 
-<details>
-    <summary><b><font size="10">Project Tree</font></b></summary>
-<div markdown="1">
-
-```
-.
-```
-</div>
-</details>
-
 ## 5️⃣ How to Run
 ## 환경 설정
 ```python
@@ -122,7 +121,3 @@ Hub에 공유하기 위해서는 터미널에 `huggingface-cli login'을 쳐서 
 ```
 python inference.py -c base_config
 ```
-## 6️⃣ Development Environment
-- Language: Python 3.8
-- 협업툴: 
-- 개발 환경:
