@@ -3,13 +3,46 @@
 본 프로젝트는 지문이 따로 주어지지 않을 때 World Knowledge에 기반해서 질의 응답을 하는 **ODQA(Open-Domain Question Answering)** Task입니다.
 본 모델은 질문에 관련된 문서를 찾아주는 "retriever" 단계와 관련된 문서를 읽고 적절한 답변을 찾거나 만들어주는 "reader" 단계로 구성되어 있습니다.
 <p align="center"><img src="https://user-images.githubusercontent.com/65378914/217729308-057c696b-6c1f-41eb-970e-14ea6281c67c.png" width="80%" height="80%"/></p>
- - 평가 지표: Exact Match(EM), F1 Score
+ - 평가 지표: Exact Match(EM), F1 Score <br>
 <details>
     <summary><b><font size="10">Project Tree</font></b></summary>
 <div markdown="1">
 
 ```
 .
+├─ README.md
+├─ assets
+│  ├─ mrc.png
+│  └─ odqa.png
+├─ inference.py # test용 
+├─ install
+│  └─ install_requirements.sh
+├─ mlm.py
+├─ model
+│  └─ Retrieval
+│     ├─ BertEncoder.py
+│     └─ RobertaEncoder.py
+├─ mrc.py
+├─ notebooks
+│  ├─ EDA.ipynb
+│  ├─ EM_compare.ipynb
+│  ├─ compare_json.ipynb
+│  ├─ ensemble_inference.ipynb
+│  ├─ korquad_json_to_datset.ipynb
+│  ├─ nbest_analyze.ipynb
+│  └─ readme.md
+├─ postprocess.py
+├─ retrieval.py # retriever 간 성능 비교
+├─ train.py # reader 실행
+├─ train_dpr.py # dense retriever 실행
+├─ trainer
+│  └─ DenseRetrievalTrainer.py
+└─ utils
+   ├─ arguments.py
+   ├─ run_mlm.py
+   ├─ trainer_qa.py
+   └─ utils_qa.py
+
 ```
 </div>
 </details>
@@ -69,7 +102,7 @@ Reader는 주어진 context 문장에서 query 문장의 답이 될 수 있는 s
 Reader는 transformers 라이브러리의 ModelForQuestionAnswering 구조로 query를 인풋으로 받아 context 각 토큰별로 답변의 시작점과 끝점이 될 확률을 계산합니다. <br>
 답변의 최대 길이는 `config.utils.max_answer_length`로 지정할 수 있습니다.<br>
 
-## Retreiver
+## Retriever
 Retriever는 주어진 query 문장에 적합한 문서들을 데이터베이스에서 읽어옵니다.  <br>
 이때 불러오는 문서의 수를 `config.retriever.topk`로 지정할 수 있습니다.
 ### 1. Sparse 
